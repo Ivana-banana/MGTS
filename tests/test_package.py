@@ -36,7 +36,7 @@ def test_diagnostics_from_zip(tmp_path):
                       'obstacles', 'solve-manifest', 'interior-loop'):
             assert source.getinfo(f'docs/{guide}.md').file_size > 0
     prefix = [sys.executable, '-I', '-c', ZIP_CLI, str(archive)]
-    for module in ('delayed_start', 'obstacles', 'solve_manifest', 'interior_loop'):
+    for module in ('delayed_start', 'obstacles', 'solve_audit', 'solve_manifest', 'interior_loop'):
         help_text = subprocess.check_output([*prefix, f'mgts_nav.{module}', '--help'], text=True)
         assert 'usage:' in help_text
 
