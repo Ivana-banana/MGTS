@@ -2,13 +2,24 @@
 
 Первый алгоритм для двух записей одного офиса. По полному обходу он строит двумерную карту занятости. Затем локализует робота на этой карте по отдельной записи инспекции и сохраняет положение на каждой метке лидара. Обработка офлайн, без запущенного ROS и без GPU.
 
+[Короткий ответ для квалификационной формы](docs/qualification.txt) · [Первые 30 минут с данными финала](docs/intake.md) · [Распределение работы](COORDINATION.md)
+
+Участники могут взять [открытую задачу с меткой ready](https://github.com/Ivana-banana/MGTS/issues?q=is%3Aissue%20is%3Aopen%20label%3Aready). Задачи с меткой `awaiting-data` требуют материалов финала. При старте назначьте issue на себя и укажите номер в PR.
+
 ## Проверить за один запуск
 
-Из корня проекта в окружении Python 3.10 или 3.11 выполните:
+Из корня MGTS в локальном Windows PowerShell один раз подготовьте окружение Python 3.10.
 
-```sh
-python -m pip install -r requirements.txt
-python -m mgts_nav.rehearse out/rehearsal-01
+```powershell
+py -3.10 -m venv .venv-mgts
+& .\.venv-mgts\Scripts\python.exe -m pip install -r requirements.txt pytest
+```
+
+Для первого прогона и при открытии нового PowerShell активируйте окружение в текущем процессе. Команды ниже используют его интерпретатор.
+
+```powershell
+$env:Path = "$(Resolve-Path .venv-mgts\Scripts);$env:Path"
+python -m mgts_nav.rehearse out/my-first-demo
 ```
 
 Команда создаёт две записи ROS 2 с шумом, дрейфом и движущейся помехой, строит карту, проводит инспекцию и сравнивает два метода с известным эталоном. Для следующего запуска укажите новую выходную папку.
@@ -24,26 +35,24 @@ python -m mgts_nav.rehearse out/rehearsal-01
 
 ## Подключить записи организаторов
 
-После заполнения профиля обе записи обрабатываются одной командой:
+Начните с двух отдельных профилей. Для каждой записи получите инвентарь и черновик с фактическими именами топиков и систем координат. На полной записи флаг `--verify-frames` проверяет также смену кадров внутри одного потока.
 
-```sh
-python -m mgts_nav.solve data/mapping data/inspection --config configs/official.json --out out/official-01
+```powershell
+python -m mgts_nav inspect data/mapping --inventory
+python -m mgts_nav inspect data/inspection --inventory
+python -m mgts_nav.profile data/mapping --verify-frames --out data/mapping.draft.json
+python -m mgts_nav.profile data/inspection --verify-frames --out data/inspection.draft.json
 ```
 
-Автоматический старт ищет положение по геометрии первого скана. При недостаточной уверенности алгоритм собирает до трёх секунд сканов по кинематическим приращениям и повторяет поиск. Если помещение симметрично и остаются сравнимые гипотезы, передайте известную позу через `--initial X Y YAW`. Оба метода получают одинаковый старт. Для разных калибровок у двух записей предусмотрен `--inspection-config`. В выходной папке сохраняются копии профилей, карта, траектории, кинематический прогноз между сканами и отдельный rosbag для RViz. Подробные параметры и команды приведены в [руководстве по подключению датчиков](docs/sensors.md).
+Сохраните объект `profile` каждого черновика соответственно в `data/mapping.json` и `data/inspection.json`. Заполните неизвестные значения по калибровкам организаторов, проверьте единицы, интервалы покоя и направление трансформов из датчика в базу. Для `PointCloud2`, `Imu` и `Odometry` есть готовые адаптеры. Для пользовательского сообщения понадобится его схема. [Подключение датчиков](docs/sensors.md)
 
-1. Разложите два rosbag в `data/mapping` и `data/inspection`. Каталог каждой записи должен содержать её метаданные и файлы данных. Выполните `python -m mgts_nav inspect data/mapping` и аналогично для инспекции. Проверьте типы, имена топиков, поля облака, frame_id, диапазоны времени, дубликаты и разрывы.
-2. Скопируйте `configs/example.json` в `configs/official.json` и внесите реальные параметры из схемы и калибровок. Имена `/demo/*` и численные параметры принадлежат синтетической сцене. Подставьте направление **из датчика в базу**, перенос в метрах и кватернион xyzw. Высотный срез задаётся в базе. Сверьте начало действительно неподвижного отрезка и его длительность, а также шкалы заголовков. Если у часов постоянное смещение, сначала исправьте его по материалам организаторов.
-3. Поддерживаемые типы — `PointCloud2` с координатами xyz float32/64, `Imu` и `Odometry` с позой базы. При другом типе добавьте перевод в `mgts_nav/bag.py`. Алгоритм получает `Scan` в общей системе. Полный состав топиков можно узнать без десериализации пользовательских типов с помощью `inspect BAG --inventory`.
-4. Запустите команды ниже. Вместо X Y YAW подставьте три числа. Для штатного метода передайте ту же позу. Нулевую позу используйте только при подтверждённом совпадении начала и ориентации с обходом.
-
-```sh
-python -m mgts_nav map data/mapping --config configs/official.json --out out/official-map
-python -m mgts_nav localize data/inspection --config configs/official.json --map out/official-map/map.yaml --initial X Y YAW --out out/official-inspection
-python -m mgts_nav baseline data/inspection --config configs/official.json --initial X Y YAW --out out/official-baseline
+```powershell
+python -m mgts_nav.solve data/mapping data/inspection --config data/mapping.json --inspection-config data/inspection.json --out out/official-01
 ```
 
-При наличии эталона в общей системе запустите `python -m mgts_nav.metrics out/official-inspection/trajectory.csv data/inspection_truth.csv`. Если жюри оставит эталон у себя, для защиты доступны карта, траектория, доля совпадений, длина интервалов потери и проверка повторных проходов. Шаблон защиты — [docs/report.md](docs/report.md).
+По умолчанию старт определяется по геометрии первого скана. При неоднозначности алгоритм повторяет поиск по нескольким сканам с доступной кинематикой. В похожих коридорах флаг `--confirm-start` дополнительно проверяет принятую односкановую гипотезу по последующим наблюдениям. При наличии документированной стартовой позы передайте `--initial X Y YAW` в метрах и радианах карты. Решение сохраняет карту, траекторию и rosbag для RViz. При наличии кинематики строится также прогноз между сканами.
+
+Если организаторы передадут эталон в системе карты, выполните `python -m mgts_nav.metrics out/official-01/inspection/trajectory.csv data/inspection_truth.csv`. При закрытом эталоне для защиты доступны доля сопоставленных сканов, длительность потерь и согласованность повторных проходов. [Шаблон отчёта](docs/report.md)
 
 ## Как устроен алгоритм
 
@@ -58,18 +67,8 @@ python -m mgts_nav baseline data/inspection --config configs/official.json --ini
 
 ## Окружение команды
 
-```sh
-python -m pip install pytest
-python -m pytest -q
-docker build -t mgts-nav .
-docker run --rm mgts-nav python -m mgts_nav --help
-```
-
-Для записи результатов из контейнера смонтируйте каталог вывода. Пример PowerShell:
-
 ```powershell
-New-Item -ItemType Directory -Force out | Out-Null
-docker run --rm --mount "type=bind,source=$((Resolve-Path out).Path),target=/out" mgts-nav python -m mgts_nav.rehearse /out/container-01
+python -m pytest -q
 ```
 
-Командные задания находятся в [COORDINATION.md](COORDINATION.md). Шаблоны issue и PR адаптированы из прошлого проекта. Схема работы команды: отдельная задача и ветка, команда воспроизведения в PR, сравнение с базой на одинаковой записи. Прямую сверку с hackathon-kit предстоит выполнить при доступе к репозиторию.
+В шаблонах issue и PR фиксируем входную запись, команду воспроизведения и сравнение с базовым методом. Для Claude Code подключены персональный режим `/tests`, защита конфигов линтеров и ревью `silent-failure-hunter`. Хук использует Node.js из PATH и запускается из корня MGTS. Правила локальной работы описаны в [AGENTS.md](AGENTS.md). [Версия командного hackathon-kit](https://github.com/IR630/hackathon-kit/tree/09fe1a9ab8a65080b20f02abbce82ead066eb207)
