@@ -41,7 +41,10 @@ def read_anchors(path):
         if not {'t', 'x', 'y', 'yaw', 'status'}.issubset(rows.fieldnames or []):
             raise ValueError('Scan trajectory needs t,x,y,yaw,status')
         for line, row in enumerate(rows, 2):
-            values = [float(row[k]) for k in ('t', 'x', 'y', 'yaw')]
+            try:
+                values = [float(row[k]) for k in ('t', 'x', 'y', 'yaw')]
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f'{path}:{line}: invalid number or missing field in t,x,y,yaw') from exc
             if not np.isfinite(values).all() or values[0] <= previous:
                 raise ValueError(f'{path}:{line}: invalid scan pose or non-increasing time')
             previous = values[0]
@@ -120,7 +123,8 @@ def reconstruct(anchors, odom, gap):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.continuous', description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('bag', type=Path)
     parser.add_argument('scan_csv', type=Path)
     parser.add_argument('output_csv', type=Path)

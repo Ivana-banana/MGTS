@@ -46,3 +46,5 @@ if __name__ == '__main__':
         run(parser.parse_args().out)
     except (OSError, ValueError) as error:
         parser.exit(2, f'{error}\n')
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted; no output directory was created\n')

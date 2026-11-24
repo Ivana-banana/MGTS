@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 from scipy.spatial import cKDTree
+import yaml
 
 from .demo import WALLS
 from .grid import read_map
@@ -49,9 +50,12 @@ def evaluate_map(points, segments, resolution, tolerance):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="python -m mgts_nav.map_eval", description=__doc__)
     parser.add_argument("map", help="map.yaml from synthetic mapping, anchored at [0,0,0]")
     parser.add_argument("--tolerance", type=float, default=0.12, help="Distance in metres")
     args = parser.parse_args()
-    _, meta, points = read_map(args.map)
+    try:
+        _, meta, points = read_map(args.map)
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as exc:
+        parser.exit(2, f"{args.map}: cannot read map.yaml: {' '.join(str(exc).split())}\n")  # one line
     print(json.dumps(evaluate_map(points, WALLS, meta["resolution"], args.tolerance), indent=2))

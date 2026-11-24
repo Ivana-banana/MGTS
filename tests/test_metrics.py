@@ -48,3 +48,10 @@ def test_reject_duplicate_time(tmp_path):
     path.write_text("t,x,y,yaw\n0,0,0,0\n0,2,0,0\n")
     with pytest.raises(ValueError, match="timestamps"):
         read_csv(path)
+
+
+def test_semicolon_separator_is_named(tmp_path):
+    path = tmp_path / 'excel.csv'
+    path.write_text('t;x;y;yaw\n0;0,5;0;0\n')
+    with pytest.raises(ValueError, match="separated by ';'"):
+        read_csv(path)

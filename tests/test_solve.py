@@ -26,9 +26,24 @@ def test_two_bags_without_any_ground_truth_files_or_start(tmp_path, confirm):
         solve(data / 'mapping', data / 'inspection', PROFILE, result)
     summary = json.loads((result / 'inspection' / 'summary.json').read_text())
     assert summary['initialization'] == ('confirmed_scan_to_map' if confirm else 'scan_to_map')
+    assert not summary['recording_order']['suspected_swap']
     inspection = read_csv(result / 'inspection' / 'trajectory.csv')
     assert [row.t for row in inspection] == [row.t for row in truth]
     assert summary['status']['matched'] >= 95
     metrics = evaluate(read_csv(result / 'inspection' / 'continuous.csv'), truth)
     assert metrics['coverage'] == 1 and metrics['ate_xy_rmse_m'] < .09
     assert {row['topic'] for row in inspect_bag(result / 'rviz', inventory=True)} == {'/map', '/pose', '/path'}
+
+
+def test_swapped_recordings_warn_without_ground_truth(tmp_path):
+    data = tmp_path / 'recordings'
+    generate(data)
+    result = tmp_path / 'swapped'
+    run = subprocess.run([sys.executable, '-m', 'mgts_nav.solve', str(data / 'inspection'),
+                          str(data / 'mapping'), '--config', str(PROFILE), '--out', str(result)],
+                         capture_output=True, text=True)
+    assert run.returncode == 0
+    assert 'WARNING' in run.stderr and 'swapped' in run.stderr
+    order = json.loads((result / 'inspection' / 'summary.json').read_text())['recording_order']
+    assert order['suspected_swap']
+    assert order['inspection']['path_m'] > 2 * order['mapping']['path_m']

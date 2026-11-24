@@ -57,7 +57,7 @@ def diagnose(xy, *, radius_m=.35, neighbors=12, max_variance_ratio=.08):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.observability', description=__doc__)
     parser.add_argument('--bag', type=Path, help='Use the first processed lidar scan')
     parser.add_argument('--config', type=Path)
     args = parser.parse_args()
@@ -65,7 +65,10 @@ def main():
         if args.config is None:
             parser.error('--bag requires --config')
         from .bag import load_config, scans
-        first = next(iter(scans(args.bag, load_config(args.config))), None)
+        try:
+            first = next(iter(scans(args.bag, load_config(args.config))), None)
+        except (OSError, KeyError, ValueError) as exc:
+            parser.exit(2, f'{exc}\n')
         if first is None:
             parser.error('Recording contains no lidar scans')
         report = dict(t=first.t, geometry=diagnose(first.xy))

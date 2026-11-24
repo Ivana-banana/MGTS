@@ -1,4 +1,5 @@
 """ROS boundary. All motion and scan timestamps below use header time (seconds)."""
+from contextlib import contextmanager
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,8 +15,31 @@ from .deskew import deskew_points
 from .leveling import build_leveler
 
 
+class RecordingError(ValueError):
+    """The path cannot be opened as a ROS recording."""
+
+
+def recording_error(path, exc):
+    message = f'{path}: cannot open recording: {exc}'
+    if path.suffix in ('.yaml', '.yml'):
+        message += f'. Pass the recording directory {path.parent}, not its {path.name}'
+    return RecordingError(message)
+
+
+@contextmanager
 def reader(path):
-    return AnyReader([Path(path)], default_typestore=get_typestore(Stores.ROS2_HUMBLE))
+    path = Path(path)
+    try:
+        bag = AnyReader([path], default_typestore=get_typestore(Stores.ROS2_HUMBLE))
+        bag.open()
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f'{path}: recording not found') from exc
+    except AnyReaderError as exc:
+        raise recording_error(path, exc) from exc
+    try:
+        yield bag
+    finally:
+        bag.close()
 
 
 def stamp(msg):
@@ -98,7 +122,12 @@ def check_frame(actual, expected):
 
 
 def load_config(path):
-    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    try:
+        cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'{path}: invalid JSON in sensor profile: {exc}') from exc
+    except UnicodeDecodeError as exc:
+        raise ValueError(f'{path}: sensor profile must be a UTF-8 JSON file') from exc
     if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
         raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
     names = ['lidar', 'lidar_frame']

@@ -48,24 +48,31 @@ def diagnose(first_xy, last_xy, trajectory):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.loop', description=__doc__)
     parser.add_argument('bag', type=Path)
     parser.add_argument('trajectory', type=Path)
     parser.add_argument('--config', required=True, type=Path)
     args = parser.parse_args()
-    with args.trajectory.open(encoding='utf-8-sig', newline='') as source:
-        rows = list(csv.DictReader(source))
-    stream = iter(scans(args.bag, load_config(args.config)))
-    first = next(stream, None)
-    if first is None or len(rows) < 2:
-        parser.error('Recording and trajectory need at least two poses')
-    last = first
-    for last in stream:
-        pass
-    if max(abs(float(rows[0]['t']) - first.t), abs(float(rows[-1]['t']) - last.t)) > .001:
-        parser.error('Trajectory endpoints must correspond to the first and last lidar scans')
-    poses = [[float(row[key]) for key in ('x', 'y', 'yaw')] for row in rows]
-    print(json.dumps(diagnose(first.xy, last.xy, poses), indent=2, allow_nan=False))
+    try:
+        with args.trajectory.open(encoding='utf-8-sig', newline='') as source:
+            rows = list(csv.DictReader(source))
+        try:
+            poses = [[float(row[key]) for key in ('x', 'y', 'yaw')] for row in rows]
+            times = [float(row['t']) for row in rows]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f'{args.trajectory}: needs numeric columns t,x,y,yaw') from exc
+        stream = iter(scans(args.bag, load_config(args.config)))
+        first = next(stream, None)
+        if first is None or len(rows) < 2:
+            parser.error('Recording and trajectory need at least two poses')
+        last = first
+        for last in stream:
+            pass
+        if max(abs(times[0] - first.t), abs(times[-1] - last.t)) > .001:
+            parser.error('Trajectory endpoints must correspond to the first and last lidar scans')
+        print(json.dumps(diagnose(first.xy, last.xy, poses), indent=2, allow_nan=False))
+    except (OSError, KeyError, ValueError) as exc:
+        parser.exit(2, f'{exc}\n')
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
+import yaml
 
 from .bag import inspect_bag, load_config, scans
 from .grid import Grid, preview, read_map
@@ -18,13 +19,49 @@ class MissingBaselineAnchor(ValueError):
     """The first scan has no synchronized kinematic position."""
 
 
+INITIAL_HELP = 'Start pose in the map frame: X and Y in metres, YAW in radians (not degrees)'
+
+
+def pose_number(text):
+    """argparse type for --initial: explain the three values instead of 'invalid float value'."""
+    try:
+        return float(text)
+    except ValueError:
+        hint = 'use a dot as the decimal separator. ' if ',' in text else ''
+        raise argparse.ArgumentTypeError(
+            f'got {text!r}; {hint}--initial needs three numbers X Y YAW '
+            '(metres, metres, radians)') from None
+
+
+def load_map(path):
+    """Read the map.yaml written by `map`, naming the expected file on typical mistakes."""
+    if path.is_dir():
+        raise ValueError(f'--map needs the map.yaml file, not a directory: try {path / "map.yaml"}')
+    if path.suffix.lower() not in ('.yaml', '.yml'):
+        raise ValueError(f'--map needs map.yaml from the map command, not {path.name}: '
+                         f'try {path.with_name("map.yaml")}')
+    try:
+        return read_map(path)
+    except (KeyError, TypeError, IndexError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError(f'{path}: not a map.yaml written by the map command ({exc})') from exc
+
+
 def initial_pose(args):
     if args.command == 'map':
         return np.zeros(3)
     if args.initial is not None:
         return np.array(args.initial)
     if args.initial_file is not None:
-        return np.array(json.loads(args.initial_file.read_text(encoding='utf-8-sig')), dtype=float)
+        path = args.initial_file
+        try:
+            value = json.loads(path.read_text(encoding='utf-8-sig'))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'{path}: invalid JSON in --initial-file: {exc}') from exc
+        if not isinstance(value, list) or len(value) != 3 or not all(
+                type(v) in (int, float) for v in value):
+            raise ValueError(f'{path}: --initial-file must hold a JSON array [x, y, yaw] '
+                             '(metres and radians in the map frame)')
+        return np.array(value, dtype=float)
     return None
 
 
@@ -41,7 +78,7 @@ def run(args, output):
     recovery = None
     if args.command == 'localize':
         map_path = args.map
-        pixels, meta, points = read_map(map_path)
+        pixels, meta, points = load_map(map_path)
         if args.recover:
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
@@ -59,8 +96,8 @@ def run(args, output):
                 try:
                     start = estimate_multiscan(prefix, pixels, meta)
                 except ValueError as multi_error:
-                    raise ValueError(f'Provide --initial or check calibration. Single scan: {single_error}. '
-                                     f'Multiple scans: {multi_error}') from multi_error
+                    raise ValueError('Provide --initial X Y YAW (metres, radians) or check calibration. '
+                                     f'Single scan: {single_error}. Multiple scans: {multi_error}') from multi_error
                 start_method = 'multiple_scans_to_map'
             else:
                 start_method = 'scan_to_map'
@@ -70,8 +107,8 @@ def run(args, output):
                     try:
                         start = confirm_start(start, first, following, pixels, meta)
                     except ValueError as error:
-                        raise ValueError(f'Could not confirm automatic start: {error}. '
-                                         'Provide --initial or check calibration.') from error
+                        raise ValueError(f'Could not confirm automatic start: {error}. Provide --initial '
+                                         'X Y YAW (metres, radians) or check calibration.') from error
                     finally:
                         del following
                     start_method = 'confirmed_scan_to_map'
@@ -132,8 +169,8 @@ def run(args, output):
                 rejected.setdefault(row.rejection_reason, []).append(row.t)
         rejection_counts = {reason: len(times) for reason, times in rejected.items()}
         if not counts['matched']:
-            raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
-                             f'Rejections: {json.dumps(rejection_counts)}')
+            raise ValueError('No scan matched the map. Check initial pose (YAW in radians), frames '
+                             f'and height band. Rejections: {json.dumps(rejection_counts)}')
     with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['t', 'x', 'y', 'yaw', 'status', 'inlier_fraction'])
@@ -155,16 +192,35 @@ def run(args, output):
     print(json.dumps(summary))
 
 
+BAG_HELP = 'ROS 2 recording directory (with metadata.yaml), a .mcap/.db3 file or a ROS 1 .bag'
+COMMANDS = {
+    'map': ('Build an occupancy map (map.yaml, map.pgm) and the route from the mapping recording',
+            'Mapping recording'),
+    'localize': ('Localize the inspection recording in a map built by the map command',
+                 'Inspection recording'),
+    'baseline': ('Dead-reckon the recording from raw odometry and a known start, for comparison',
+                 'Recording with odometry'),
+}
+EPILOG = '''other modules (each has --help):
+  python -m mgts_nav.solve     map + localize for a mapping/inspection pair
+  python -m mgts_nav.profile   draft a sensor profile from a recording
+  python -m mgts_nav.metrics   ATE/RPE of a trajectory against ground truth
+  python -m mgts_nav.rehearse  full demo on synthetic recordings'''
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog='python -m mgts_nav', description=__doc__, epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
-    survey = sub.add_parser('inspect', help='List topics, frames, fields, timing and gaps')
-    survey.add_argument('bag', type=Path)
+    survey = sub.add_parser('inspect', help='List topics, frames, fields, timing and gaps',
+                            description='List topics, frames, fields, timing and gaps of a recording.')
+    survey.add_argument('bag', type=Path, help=BAG_HELP)
     survey.add_argument('--inventory', action='store_true', help='Read metadata only; skip message payloads')
-    for name in ('map', 'localize', 'baseline'):
-        p = sub.add_parser(name)
-        p.add_argument('bag', type=Path)
-        p.add_argument('--config', required=True, type=Path)
+    for name, (summary, bag_help) in COMMANDS.items():
+        p = sub.add_parser(name, help=summary, description=summary + '.')
+        p.add_argument('bag', type=Path, help=f'{bag_help}. {BAG_HELP}')
+        p.add_argument('--config', required=True, type=Path, help='Sensor profile JSON for this recording')
         p.add_argument('--out', required=True, type=Path, help='A new output directory')
         if name != 'baseline':
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
@@ -173,12 +229,14 @@ def main():
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')
-            group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
-            group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
+            group.add_argument('--initial', type=pose_number, nargs=3, metavar=('X', 'Y', 'YAW'),
+                               help=INITIAL_HELP)
+            group.add_argument('--initial-file', type=Path,
+                               help='JSON array [x, y, yaw] in the map frame, metres and radians')
         if name == 'localize':
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
-            p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
+            p.add_argument('--map', type=Path, required=True, help='map.yaml written by the map command')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
     args = parser.parse_args()
     try:
@@ -186,7 +244,7 @@ def main():
             print(json.dumps(inspect_bag(args.bag, args.inventory), indent=2))
             return
         if args.out.exists():
-            parser.error(f'Output already exists: {args.out}. Choose a new directory.')
+            parser.exit(2, f'Output already exists: {args.out}. Choose a new directory.\n')
         args.out.parent.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(dir=args.out.parent) as tmp:
             stage = Path(tmp) / 'result'
@@ -197,6 +255,8 @@ def main():
         parser.exit(3, f'{error}\n')
     except (OSError, KeyError, ValueError) as error:
         parser.exit(2, f'{error}\n')
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted; no output directory was created\n')
 
 
 if __name__ == '__main__':

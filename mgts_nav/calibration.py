@@ -65,7 +65,7 @@ def read_edges(path, topic):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.calibration', description=__doc__)
     parser.add_argument('bag', type=Path)
     parser.add_argument('--base', required=True)
     parser.add_argument('--lidar', required=True)
