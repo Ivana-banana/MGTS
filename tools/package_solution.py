@@ -11,13 +11,23 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
-    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'continuous', 'demo',
-    'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
-    'multiscan', 'observability', 'plan_alignment', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
-    'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',
+    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'clock_experiment',
+    'coarse_start', 'continuous', 'demo', 'deskew', 'glass_experiment', 'grid', 'initialization', 'leveling',
+    'loop', 'map_eval', 'metrics', 'multiscan', 'observability', 'plan_alignment', 'pose_graph', 'profile',
+    'quality', 'recovery', 'rehearse', 'ros_export', 'slam', 'solve', 'start_confirmation', 'start_trial',
+    'stress', 'vision', 'visual_fusion', 'zones',
+)
+# The packaging test needs Git history, so the archive ships every other test.
+TESTS = (
+    'ambiguity', 'bag', 'calibration', 'camera_demo', 'coarse_corridor', 'coarse_start_budget', 'continuous',
+    'corridor', 'demo', 'deskew', 'deskew_experiment', 'glass_experiment', 'initialization', 'intake',
+    'leveling', 'loop', 'map_eval', 'metrics', 'multiscan', 'observability', 'plan_alignment',
+    'plot_quality', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearsal', 'ros_export',
+    'scan_rejections', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
-    'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
+    'README.md', 'requirements.txt', 'pytest.ini', 'Dockerfile', '.dockerignore',
+    'docs/package.md', 'docs/qualification.txt', 'tools/benchmark_length.py', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
     'tools/evaluate_camera.py', 'docs/camera-experiment.md',
@@ -26,6 +36,7 @@ FILES = tuple(sorted((
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
     'docs/scan-rejections.md', 'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
     *(f'mgts_nav/{name}.py' for name in MODULES),
+    *(f'tests/test_{name}.py' for name in TESTS),
 )))
 
 

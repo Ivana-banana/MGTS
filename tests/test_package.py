@@ -1,5 +1,8 @@
 import ast
 import hashlib
+import io
+from pathlib import PurePosixPath
+import re
 import subprocess
 import sys
 import zipfile
@@ -23,9 +26,12 @@ def test_reproducible_committed_runtime(tmp_path):
         }
         assert {name for name in names if name.startswith('tools/')} == {
             'tools/plot_quality.py', 'tools/evaluate_camera.py', 'tools/evaluate_deskew.py',
+            'tools/benchmark_length.py',
         }
-        assert all(name.startswith(('mgts_nav/', 'docs/', 'configs/', 'tools/'))
-                   or name in ('README.md', 'requirements.txt') for name in names)
+        assert all(name.startswith(('mgts_nav/', 'docs/', 'configs/', 'tools/', 'tests/test_'))
+                   or name in ('README.md', 'requirements.txt', 'pytest.ini', 'Dockerfile', '.dockerignore')
+                   for name in names)
+        assert 'tests/test_package.py' not in names
         assert not any(name.endswith(('.bag', '.mcap', '.db3')) for name in names)
         for name in names:
             if name.startswith('mgts_nav/'):
@@ -47,3 +53,40 @@ def test_cli_preserves_existing_destination(tmp_path):
                             capture_output=True)
     assert result.returncode == 2
     assert archive.read_bytes() == b'keep'
+
+
+def tracked(pattern):
+    return set(subprocess.check_output(['git', 'ls-files', pattern], text=True).split())
+
+
+def test_archive_runs_its_own_test_suite():
+    # A module or test added to the repository must be listed, or the archive cannot run pytest.
+    expected = tracked('mgts_nav/*.py') | tracked('tests/test_*.py')
+    assert expected - set(FILES) == {'tests/test_package.py'}
+
+
+def test_archived_documents_link_inside_archive():
+    # README links to the team board and agent rules on purpose; they stay in the repository.
+    internal = {'COORDINATION.md', 'AGENTS.md'}
+    commit, payload = build('HEAD')
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        names = set(archive.namelist())
+        missing = []
+        for name in names:
+            if not name.endswith('.md'):
+                continue
+            text = archive.read(name).decode('utf-8-sig')
+            for target in re.findall(r'\]\(([^)\s]+)\)', text):
+                target = target.split('#', 1)[0]
+                if not target or '://' in target or target in internal:
+                    continue
+                path = PurePosixPath(name).parent / target
+                parts = []
+                for part in path.parts:
+                    if part == '..':
+                        parts.pop()
+                    elif part != '.':
+                        parts.append(part)
+                if '/'.join(parts) not in names:
+                    missing.append(f'{name} -> {target}')
+    assert missing == []
