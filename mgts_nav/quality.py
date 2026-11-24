@@ -5,8 +5,12 @@ from statistics import median
 import numpy as np
 
 
-def inspection_quality(estimates):
-    """Summarize the scan-rate output of track(); no reference poses are used."""
+def inspection_quality(estimates, gap_threshold_s=None):
+    """Summarize the scan-rate output of track(); no reference poses are used.
+
+    gap_threshold_s overrides the default of three median scan intervals, e.g. for short
+    records where the median does not describe the sensor rate.
+    """
     times = np.asarray([row.t for row in estimates], dtype=float)
     if not len(times) or not np.isfinite(times).all():
         raise ValueError('Inspection needs finite scan timestamps')
@@ -15,7 +19,12 @@ def inspection_quality(estimates):
         raise ValueError('Inspection scan timestamps must increase')
 
     # Gaps have no rows. Report them independently of consecutive rejected scans.
-    gap_threshold = 3 * float(np.median(intervals)) if len(intervals) >= 2 else None
+    if gap_threshold_s is not None:
+        if not gap_threshold_s > 0:
+            raise ValueError('Gap threshold must be positive')
+        gap_threshold = float(gap_threshold_s)
+    else:
+        gap_threshold = 3 * float(np.median(intervals)) if len(intervals) >= 2 else None
     gaps = []
     if gap_threshold is not None:
         for i in np.flatnonzero(intervals > gap_threshold):

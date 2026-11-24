@@ -26,11 +26,16 @@ ORANGE_BAND, GREY_BAND, GRID = (253, 232, 205), (228, 228, 228), (225, 225, 225)
 def read_trajectory(path):
     """Rows of a localize trajectory.csv with their 1-based line numbers in the file."""
     rows = []
-    with Path(path).open(newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
+    # utf-8-sig: a CSV re-saved by Excel or PowerShell 5.1 starts with a BOM.
+    with Path(path).open(newline='', encoding='utf-8-sig') as f:
+        header = f.readline()
+        f.seek(0)
+        delimiter = ';' if header.count(';') > header.count(',') else ','
+        reader = csv.DictReader(f, delimiter=delimiter)
         missing = {'t', 'status', 'inlier_fraction'} - set(reader.fieldnames or ())
         if missing:
-            raise ValueError(f'{path} lacks columns {sorted(missing)}; use the output of localize or solve')
+            raise ValueError(f'{path} lacks columns {sorted(missing)} (header: {header.strip()!r}); '
+                             'use trajectory.csv written by localize or solve')
         for row in reader:
             rows.append(dict(line=reader.line_num, t=float(row['t']), status=row['status'],
                              inlier_fraction=float(row['inlier_fraction'])))
@@ -64,7 +69,7 @@ def intervals(rows, quality, t0=None):
 
 
 def _font(size):
-    for name in ('DejaVuSans.ttf', 'arial.ttf'):
+    for name in ('DejaVuSans.ttf', 'arial.ttf', 'LiberationSans-Regular.ttf'):
         try:
             return ImageFont.truetype(name, size)
         except OSError:
@@ -104,11 +109,14 @@ def render(rows, quality, found, output, title='', t0=None):
     draw = ImageDraw.Draw(image)
     small, normal = _font(15), _font(18)
 
+    def span(item):  # intervals clipped by a window still start and end inside the frame
+        return px(max(item['start_rel_s'], lo)), px(min(item['end_rel_s'], hi))
+
     for item in found:  # bands first so points stay on top
-        a, b = px(item['start_rel_s']), px(item['end_rel_s'])
+        a, b = span(item)
         if item['kind'] == 'prediction_run':
             half = max(3.0, (x1 - x0) / max(len(rows), 1) / 2)
-            draw.rectangle([a - half, y1, b + half, y0], fill=ORANGE_BAND)
+            draw.rectangle([max(a - half, x0), y1, min(b + half, x1), y0], fill=ORANGE_BAND)
         else:
             w, h = max(int(b - a), 1), y0 - y1
             band = Image.new('RGB', (w, h), GREY_BAND)
@@ -127,15 +135,25 @@ def render(rows, quality, found, output, title='', t0=None):
     label = Image.new('RGB', (y0 - y1, 24), 'white')
     ImageDraw.Draw(label).text(((y0 - y1) / 2, 12), 'inlier fraction of scan', fill=INK, font=normal, anchor='mm')
     image.paste(label.rotate(90, expand=True), (14, y1))
+    # Up to two label rows above the frame; a label that would overlap both is left to the CSV.
+    row_end = [-1e9, -1e9]
     for item in found:
-        a, b = px(item['start_rel_s']), px(item['end_rel_s'])
-        draw.text(((a + b) / 2, y1 - 4), item['label'], fill=ORANGE if item['label'][0] == 'P' else GREY,
-                  font=small, anchor='md')
+        a, b = span(item)
+        text = item['label'] + ('*' if item.get('clipped') else '')
+        w = draw.textlength(text, font=small)
+        x = min(max((a + b) / 2, x0 + w / 2), x1 - w / 2)
+        for level in (0, 1):
+            if x - w / 2 > row_end[level] + 4:
+                row_end[level] = x + w / 2
+                draw.text((x, y1 - 4 - 18 * level), text, fill=ORANGE if text[0] == 'P' else GREY,
+                          font=small, anchor='md')
+                break
 
     threshold = quality['gap_threshold_s']
     for prev, cur, a, b in zip(rows, rows[1:], rel, rel[1:]):
         joined = prev['status'] == cur['status'] == 'matched'
-        if joined and (threshold is None or b - a <= threshold):
+        # Without a cadence (fewer than three scans) no interval is known to be continuous.
+        if joined and threshold is not None and b - a <= threshold:
             draw.line([(px(a), py(prev['inlier_fraction'])), (px(b), py(cur['inlier_fraction']))],
                       fill=BLUE, width=2)
     for row, s in zip(rows, rel):
@@ -143,7 +161,7 @@ def render(rows, quality, found, output, title='', t0=None):
         if row['status'] == 'matched':
             draw.ellipse([x - 3, y - 3, x + 3, y + 3], fill=BLUE)
         else:
-            draw.polygon([(x, y - 5), (x - 5, y + 4), (x + 5, y + 4)], outline=ORANGE)
+            draw.polygon([(x, y - 10), (x - 5, y - 1), (x + 5, y - 1)], outline=ORANGE)  # stands on its value
 
     matched = quality['matched_scan_fraction']
     draw.text((x0, 20), f'{title}  scans {len(rows)} · matched {matched:.0%}', fill=INK, font=normal, anchor='ls')
@@ -163,30 +181,50 @@ def render(rows, quality, found, output, title='', t0=None):
 
 
 def write_intervals(found, path):
-    fields = ['label', 'kind', 'start_rel_s', 'end_rel_s', 'start_s', 'end_s', 'scans', 'first_line', 'last_line']
+    fields = ['label', 'kind', 'start_rel_s', 'end_rel_s', 'start_s', 'end_s', 'scans', 'first_line', 'last_line',
+              'clipped']
     with Path(path).open('w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fields, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(found)
 
 
-def plot(trajectory, output, window=None, title=None):
-    """Write PNG and the interval table next to it; return the intervals."""
+def table_path(output):
+    output = Path(output)
+    return output.with_name(output.stem + '.intervals.csv')
+
+
+def plot(trajectory, output, window=None, title=None, gap_threshold_s=None):
+    """Write PNG and the interval table beside it; return the intervals.
+
+    Intervals, labels and the gap threshold always come from the whole record, so a
+    window shows the same P/G labels as the full plot; a clipped interval is marked.
+    """
+    trajectory, output = Path(trajectory), Path(output)
+    table = table_path(output)
+    for target in (output, table):
+        if target.resolve() == trajectory.resolve():
+            raise ValueError(f'Output {target} would overwrite the input trajectory')
     rows = read_trajectory(trajectory)
     t0 = rows[0]['t']
+    quality = inspection_quality([Estimate(r['t'], None, r['status'], r['inlier_fraction']) for r in rows],
+                                 gap_threshold_s=gap_threshold_s)
+    found = intervals(rows, quality, t0)
+    label = title if title is not None else str(trajectory.parent.name)
     if window is not None:
         start, end = window
-        rows = [row for row in rows if start <= row['t'] - t0 <= end]
-        if not rows:
+        shown = [row for row in rows if start <= row['t'] - t0 <= end]
+        if not shown:
             raise ValueError(f'No scans between {start} and {end} s from the first scan')
-    quality = inspection_quality([Estimate(r['t'], None, r['status'], r['inlier_fraction']) for r in rows])
-    found = intervals(rows, quality, t0)
-    output = Path(output)
-    label = title if title is not None else str(Path(trajectory).parent.name)
-    if window is not None:
+        lo, hi = shown[0]['t'] - t0, shown[-1]['t'] - t0
+        found = [item for item in found if item['end_rel_s'] >= lo and item['start_rel_s'] <= hi]
+        for item in found:
+            item['clipped'] = item['start_rel_s'] < lo or item['end_rel_s'] > hi
+        rows = shown
         label += f'  lines {rows[0]["line"]}-{rows[-1]["line"]}'
+        quality = dict(quality, matched_scan_fraction=sum(r['status'] == 'matched' for r in rows) / len(rows))
     render(rows, quality, found, output, label, t0)
-    write_intervals(found, output.with_suffix('.csv'))
+    write_intervals(found, table)
     return found
 
 
@@ -232,6 +270,8 @@ def main():
     parser.add_argument('--out', type=Path, help='PNG path; the interval table is written beside it as .csv')
     parser.add_argument('--from', dest='start', type=float, help='window start, s from the first scan')
     parser.add_argument('--to', dest='end', type=float, help='window end, s from the first scan')
+    parser.add_argument('--gap-s', type=float,
+                        help='gap threshold, s (default: three median scan intervals, as in summary.json)')
     parser.add_argument('--demo', type=Path, metavar='OUT',
                         help='build the synthetic demo and a copy with a lidar outage, plot both')
     args = parser.parse_args()
@@ -246,13 +286,16 @@ def main():
         if args.start is not None or args.end is not None:
             window = (args.start if args.start is not None else float('-inf'),
                       args.end if args.end is not None else float('inf'))
-        out = args.out or path.with_name('timeline.png')
-        found = plot(path, out, window)
-        print(f'{out}\n{out.with_suffix(".csv")}')
+        name = 'timeline.png' if window is None else ('timeline-' + ('start' if args.start is None else f'{args.start:g}') + '-'
+                                                 + ('end' if args.end is None else f'{args.end:g}') + '.png')
+        out = args.out or path.with_name(name)
+        found = plot(path, out, window, gap_threshold_s=args.gap_s)
+        print(f'{out}\n{table_path(out)}')
         for item in found:
-            print(f"{item['label']}: {item['start_rel_s']:.2f}-{item['end_rel_s']:.2f} s, "
+            print(f"{item['label']}{' (clipped)' if item.get('clipped') else ''}: "
+                  f"{item['start_rel_s']:.2f}-{item['end_rel_s']:.2f} s, "
                   f"lines {item['first_line']}-{item['last_line']} of {path}")
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(2, f'{error}\n')
 
 
