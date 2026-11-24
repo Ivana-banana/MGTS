@@ -269,11 +269,12 @@ def scans(path, cfg):
                 if not np.isfinite(elapsed).all():
                     raise ValueError('Non-finite per-point time offsets')
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
-                if interval_samples(odom[:, 0], begin, end, gap) is None:
+                span = interval_samples(odom[:, 0], begin, end, gap)
+                if span is None:
                     reason = 'deskew_odom_unavailable'
                     xyz = xyz[:0]
                 else:
-                    xyz = deskew_points(xyz, elapsed, t, odom, gap)
+                    xyz = deskew_points(xyz, elapsed, t, odom[span], gap)
             origin = offset
             if leveler is not None:
                 try:
