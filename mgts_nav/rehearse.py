@@ -71,8 +71,14 @@ def report(output, metrics):
         f"Траектория обхода при построении карты: ATE {centimetres(mapping['ate_xy_rmse_m'])}",
     ]
     if ours['ate_xy_rmse_m'] and odom['ate_xy_rmse_m']:
-        ratio = f"{odom['ate_xy_rmse_m'] / ours['ate_xy_rmse_m']:.1f}".replace('.', ',')
-        lines.append(f'Ошибка локализации в {ratio} раза меньше, чем у одометрии.')
+        ratio = odom['ate_xy_rmse_m'] / ours['ate_xy_rmse_m']
+        times = f'{max(ratio, 1 / ratio):.1f}'
+        if times == '1.0':
+            lines.append('Ошибка локализации примерно такая же, как у одометрии.')
+        elif ratio > 1:
+            lines.append(f"Ошибка локализации в {times.replace('.', ',')} раза меньше, чем у одометрии.")
+        else:
+            lines.append(f"Ошибка локализации больше, чем у одометрии, в {times.replace('.', ',')} раза.")
     lines += ['Посмотреть:',
               f'  сравнение с эталоном  {output / "comparison.png"}',
               f'  маршрут инспекции     {output / "inspection" / "route.png"}',

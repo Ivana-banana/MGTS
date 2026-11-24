@@ -3,7 +3,7 @@ import json
 
 from PIL import Image
 
-from mgts_nav.rehearse import run
+from mgts_nav.rehearse import report, run
 
 
 def test_rehearsal(tmp_path, capsys):
@@ -22,3 +22,14 @@ def test_rehearsal(tmp_path, capsys):
     assert f"ATE {100 * metrics['inspection']['ate_xy_rmse_m']:.1f} см".replace('.', ',') in report
     assert str(out / 'comparison.png') in report and str(out / 'metrics.json') in report
     assert '{' not in report
+
+
+def test_report_states_which_error_is_smaller(tmp_path):
+    def summary(ours, odom):
+        side = dict(matched_samples=100, truth_samples=100, coverage=1.)
+        return dict(inspection=dict(side, ate_xy_rmse_m=ours), baseline=dict(side, ate_xy_rmse_m=odom),
+                    mapping=dict(ate_xy_rmse_m=.05))
+    assert 'в 2,5 раза меньше, чем у одометрии' in report(tmp_path, summary(.04, .1))
+    worse = report(tmp_path, summary(.1, .04))
+    assert 'больше, чем у одометрии, в 2,5 раза' in worse and 'меньше' not in worse
+    assert 'примерно такая же' in report(tmp_path, summary(.1, .102))
