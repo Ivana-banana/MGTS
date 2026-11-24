@@ -33,7 +33,7 @@
 
 ```powershell
 $python = '.\.venv-mgts\Scripts\python.exe'
-& $python -m tools.plot_quality out/inspection-result/trajectory.csv out/quality-clean.png
+& $python -m tools.plot_quality out/my-first-demo/inspection/trajectory.csv out/quality-clean.png
 ```
 
 [Обычная демоинспекция](quality-clean.png) содержит 100 сопоставленных сканов. На [примере с потерей данных](quality-gap.png) крестиками отмечены три скана на прогнозе при ошибочном старте. Штриховка показывает другой тип потери: между метками 252,935 и 255,035 с отсутствуют сообщения лидара. Это строки 31 и 32 таблицы с нарушением. Линия в этом интервале прерывается. Высота линии показывает долю точек скана, совпавших с картой; для оценки абсолютной ошибки положения требуется отдельный эталон.
@@ -41,7 +41,7 @@ $python = '.\.venv-mgts\Scripts\python.exe'
 Чтобы воспроизвести второй рисунок, используйте демоданные и карту из раздела репетиции. Команды создают новые выходные каталоги и PNG.
 
 ```powershell
-& $python -c "from pathlib import Path; from mgts_nav.stress import fault_bag; from mgts_nav.bag import load_config; from mgts_nav.demo import PROFILE; fault_bag(Path('out/demo-agent/inspection'), Path('out/quality-gap-bag'), 'lidar_no_messages', load_config(PROFILE))"
-& $python -m mgts_nav localize out/quality-gap-bag --map out/office-map/map.yaml --config configs/example.json --initial 50 50 0 --recover --out out/quality-gap
+& $python -c "from pathlib import Path; from mgts_nav.stress import fault_bag; from mgts_nav.bag import load_config; from mgts_nav.demo import PROFILE; fault_bag(Path('out/my-first-demo/data/inspection'), Path('out/quality-gap-bag'), 'lidar_no_messages', load_config(PROFILE))"
+& $python -m mgts_nav localize out/quality-gap-bag --map out/my-first-demo/map/map.yaml --config configs/example.json --initial 50 50 0 --recover --out out/quality-gap
 & $python -m tools.plot_quality out/quality-gap/trajectory.csv out/quality-gap.png
 ```
