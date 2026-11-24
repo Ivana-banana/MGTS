@@ -12,7 +12,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
     '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'continuous', 'demo',
-    'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
+    'deskew', 'grid', 'image_pairs', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
     'multiscan', 'native_grid', 'observability', 'plan_alignment', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
     'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'sync', 'vision', 'visual_fusion', 'zones',
 )
@@ -20,7 +20,7 @@ FILES = tuple(sorted((
     'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
-    'tools/evaluate_camera.py', 'docs/camera-experiment.md',
+    'tools/evaluate_camera.py', 'docs/camera-experiment.md', 'docs/image-pairs.md',
     'tools/evaluate_deskew.py', 'docs/deskew-experiment.md',
     'tools/native_grid.cpp', 'tools/benchmark_native_grid.py', 'docs/native-grid.md',
     'docs/plan-alignment.md', 'docs/plan-landmarks.json', 'docs/office-plan.png', 'docs/plan-route.png',

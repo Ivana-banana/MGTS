@@ -18,6 +18,7 @@ def test_reproducible_committed_runtime(tmp_path):
     with zipfile.ZipFile(archive) as result:
         names = result.namelist()
         assert tuple(names) == FILES
+        assert {'mgts_nav/image_pairs.py', 'docs/image-pairs.md'} <= set(names)
         assert {name for name in names if name.startswith('configs/')} == {
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
         }
