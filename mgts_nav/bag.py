@@ -1,5 +1,7 @@
 """ROS boundary. All motion and scan timestamps below use header time (seconds)."""
+import codecs
 import json
+import locale
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,7 +16,19 @@ from .deskew import deskew_points
 from .leveling import build_leveler
 
 
+def check_metadata_encoding(path):
+    """rosbags reads metadata.yaml in the locale encoding, cp1251 on Russian Windows."""
+    metadata = Path(path) / 'metadata.yaml'
+    if codecs.lookup(locale.getpreferredencoding(False)).name == 'utf-8' or not metadata.is_file():
+        return
+    if not metadata.read_bytes().isascii():
+        raise ValueError(f'{metadata} contains non-ASCII names that Python would misread as '
+                         f'{locale.getpreferredencoding(False)}. Rerun in UTF-8 mode: '
+                         '$env:PYTHONUTF8 = 1 in PowerShell, or python -X utf8.')
+
+
 def reader(path):
+    check_metadata_encoding(path)
     return AnyReader([Path(path)], default_typestore=get_typestore(Stores.ROS2_HUMBLE))
 
 

@@ -118,3 +118,17 @@ def test_scan_fusion_uses_header_clock_handles_wrap_and_sensor_gaps(monkeypatch)
     assert len(without_imu) == len(scans)
     assert all(scan.gyro_delta is None for scan in without_imu)
     np.testing.assert_allclose(without_imu[1].odom, scans[1].odom)
+
+
+@pytest.mark.parametrize('encoding', ['cp1251', 'UTF-8'])
+def test_non_ascii_metadata_needs_utf8_mode(tmp_path, monkeypatch, encoding):
+    # ros2 bag record names storage files after the output folder, here in Cyrillic.
+    (tmp_path / 'metadata.yaml').write_text('relative_file_paths:\n- обход_0.db3\n', encoding='utf-8')
+    monkeypatch.setattr(bag.locale, 'getpreferredencoding', lambda do_setlocale=True: encoding)
+    if encoding == 'cp1251':
+        with pytest.raises(ValueError, match='PYTHONUTF8'):
+            bag.reader(tmp_path)
+    else:
+        bag.check_metadata_encoding(tmp_path)
+    (tmp_path / 'metadata.yaml').write_text('relative_file_paths:\n- inspection_0.db3\n', encoding='utf-8')
+    bag.check_metadata_encoding(tmp_path)
