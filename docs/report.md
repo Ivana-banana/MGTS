@@ -26,3 +26,22 @@
 ## Воспроизводимость и ограничения
 
 Команда запуска — […]. Конфигурация и железо — […]. Время обработки — […]. Участок с наибольшей ошибкой, предполагаемая причина и подтверждающий фрагмент данных — […].
+
+## График качества привязки
+
+После `localize` или `solve` передайте путь к CSV инспекции и новое имя PNG. Для графика нужны три колонки: `t`, `status`, `inlier_fraction`. Порог пропуска совпадает с `summary.json`: интервал больше трёх медианных интервалов между сканами. При одном или двух отсчётах частоты недостаточно для оценки пропусков. График использует время от начала инспекции в секундах. Для перехода к исходному CSV прибавьте к показанию оси напечатанное на графике значение t₀. Для каждого разрыва и серии прогнозов команда также выводит абсолютные метки и номера строк (заголовок — строка 1).
+
+```powershell
+$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+& $python -m tools.plot_quality out/inspection-result/trajectory.csv out/quality-clean.png
+```
+
+[Обычная демоинспекция](quality-clean.png) содержит 100 сопоставленных сканов. На [примере с потерей данных](quality-gap.png) крестиками отмечены три скана на прогнозе при ошибочном старте. Штриховка показывает другой тип потери: между метками 252,935 и 255,035 с отсутствуют сообщения лидара. Это строки 31 и 32 таблицы с нарушением. Линия в этом интервале прерывается. Высота линии показывает долю точек скана, совпавших с картой; для оценки абсолютной ошибки положения требуется отдельный эталон.
+
+Чтобы воспроизвести второй рисунок, используйте демоданные и карту из раздела репетиции. Команды создают новые выходные каталоги и PNG.
+
+```powershell
+& $python -c "from pathlib import Path; from mgts_nav.stress import fault_bag; from mgts_nav.bag import load_config; from mgts_nav.demo import PROFILE; fault_bag(Path('out/demo-agent/inspection'), Path('out/quality-gap-bag'), 'lidar_no_messages', load_config(PROFILE))"
+& $python -m mgts_nav localize out/quality-gap-bag --map out/office-map/map.yaml --config configs/example.json --initial 50 50 0 --recover --out out/quality-gap
+& $python -m tools.plot_quality out/quality-gap/trajectory.csv out/quality-gap.png
+```
