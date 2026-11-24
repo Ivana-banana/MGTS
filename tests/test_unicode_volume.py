@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import zipfile
 
 import yaml
 
@@ -70,22 +71,34 @@ def test_solve_children_inherit_utf8_mode(tmp_path):
     rename_volumes(data)
     archive = tmp_path / 'runtime.zip'
     archive.write_bytes(build('HEAD')[1])
+    probe_file = tmp_path / 'inspect_child_mode.py'
+    probe_file.write_text("""
+import sys
+from pathlib import Path
+import mgts_nav
+mode, archive = sys.argv[1:]
+assert sys.flags.utf8_mode == int(mode)
+if archive:
+    assert Path(archive) in Path(mgts_nav.__file__).parents
+""", encoding='utf-8')
+    probe_archive = tmp_path / 'probe.zip'
+    probe_archive.write_bytes(archive.read_bytes())
+    with zipfile.ZipFile(probe_archive, 'a') as bundle:
+        bundle.write(probe_file, probe_file.name)
     probe = """
 import subprocess, sys
 location, mode = sys.argv[1:]
 if location:
     sys.path.insert(0, location)
 from mgts_nav.solve import module_command
-condition = f'import sys, mgts_nav; assert sys.flags.utf8_mode == {mode}'
-if location:
-    condition += f'; from pathlib import Path; assert Path({location!r}) in Path(mgts_nav.__file__).parents'
-subprocess.run(module_command('timeit', '-n', '1', '-r', '1', condition), check=True)
+subprocess.run(module_command('inspect_child_mode', mode, location), check=True)
 """
     for label, location in [('git', ''), ('zip', str(archive))]:
         isolation = ['-I'] if location else []
         for mode in (0, 1):
-            subprocess.run([sys.executable, *isolation, '-X', f'utf8={mode}', '-c', probe, location, str(mode)],
-                           env=dict(os.environ, PYTHONUTF8=str(1-mode)), check=True)
+            subprocess.run([sys.executable, *isolation, '-X', f'utf8={mode}', '-c', probe,
+                            str(probe_archive) if location else '', str(mode)],
+                           env=dict(os.environ, PYTHONUTF8=str(1-mode), PYTHONPATH=str(tmp_path)), check=True)
         startup = ['-m', 'mgts_nav.solve']
         if location:
             startup = ['-c', "import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); "
