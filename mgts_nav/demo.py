@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
-from rosbags.rosbag2 import Writer
+from rosbags.rosbag2 import StoragePlugin, Writer
 from rosbags.typesys import Stores, get_typestore
 from scipy.spatial.transform import Rotation
 
@@ -22,11 +22,12 @@ TOPIC_TYPES = {
     "imu": "sensor_msgs/msg/Imu",
     "odom": "nav_msgs/msg/Odometry",
 }
+STORAGE = {"sqlite3": StoragePlugin.SQLITE3, "mcap": StoragePlugin.MCAP}
 
 
-def pose_at(run, elapsed, layout="office"):
+def pose_at(run, elapsed, layout="office", duration=None):
     """Analytic truth in the mapping start frame, with stationary ends."""
-    duration = DURATION[run]
+    duration = DURATION[run] if duration is None else duration
     fraction = np.clip((elapsed - 1.0) / (duration - 2.0), 0.0, 1.0)
     if layout == "corridor":
         a = 2 * np.pi * fraction
@@ -100,7 +101,8 @@ def lidar_points(pose, elapsed, profile, rng, walls=WALLS, dropout=0.10):
     return sensor.apply(base_relative).astype("<f4")
 
 
-def record(directory, run, profile, store, seed, layout="office"):
+def record(directory, run, profile, store, seed, layout="office", storage="sqlite3"):
+    duration = DURATION[run] if duration is None else duration
     rng = np.random.default_rng(seed)
     types = store.types
     vector = types["geometry_msgs/msg/Vector3"]
@@ -108,7 +110,7 @@ def record(directory, run, profile, store, seed, layout="office"):
     field = types["sensor_msgs/msg/PointField"]
     fields = [field(name, 4 * idx, 7, 1) for idx, name in enumerate("xyz")]
     zero_cov = np.zeros(36)
-    start = pose_at(run, 0.0, layout)
+    start = pose_at(run, 0.0, layout, duration)
     walls = WALLS
     if layout == "corridor":
         # A long narrow hall with asymmetric recesses; a side door swings between runs.
@@ -120,11 +122,11 @@ def record(directory, run, profile, store, seed, layout="office"):
     inverse_imu = Rotation.from_quat(profile["base_from_imu_xyzw"]).inv()
     # Distinct header clocks/sample phases share the same epoch.
     schedule = []
-    end_ns = int(DURATION[run] * 1e9)
+    end_ns = int(duration * 1e9)
     for key, period, first in [("imu", 20_000_000, 0), ("odom", 50_000_000, 0),
                                ("lidar", 100_000_000, 35_000_000)]:
         schedule.extend((t, key) for t in range(first, end_ns + 1, period))
-    with Writer(directory / run, version=8) as bag, (
+    with Writer(directory / run, version=8, storage_plugin=STORAGE[storage]) as bag, (
         directory / f"{run}_truth.csv"
     ).open("w", newline="", encoding="utf-8") as truth:
         rows = csv.writer(truth)
@@ -136,7 +138,7 @@ def record(directory, run, profile, store, seed, layout="office"):
             ns = START_NS[run] + dt_ns
             t = types["builtin_interfaces/msg/Time"](*divmod(ns, 1_000_000_000))
             header = types["std_msgs/msg/Header"](t, profile[f"{key}_frame"])
-            pose = pose_at(run, elapsed, layout)
+            pose = pose_at(run, elapsed, layout, duration)
             if key == "lidar":
                 xyz = lidar_points(pose, elapsed, profile, rng, walls, 0.35 if layout == "corridor" else 0.10)
                 message = types[TOPIC_TYPES[key]](
@@ -144,8 +146,8 @@ def record(directory, run, profile, store, seed, layout="office"):
                     xyz.view(np.uint8).ravel(), True)
                 rows.writerow([f"{ns / 1e9:.9f}", *pose])
             elif key == "imu":
-                rate = (pose_at(run, elapsed + 0.001, layout)[2]
-                        - pose_at(run, elapsed - 0.001, layout)[2]) / 0.002
+                rate = (pose_at(run, elapsed + 0.001, layout, duration)[2]
+                        - pose_at(run, elapsed - 0.001, layout, duration)[2]) / 0.002
                 gyro = inverse_imu.apply([0.0, 0.0, rate + 0.015])
                 gyro += rng.normal(0.0, 0.002, 3)
                 gravity = inverse_imu.apply([0.0, 0.0, 9.81])
@@ -155,7 +157,7 @@ def record(directory, run, profile, store, seed, layout="office"):
                     vector(*gravity), np.zeros(9))
             else:
                 # Each run has its own odom frame, with scale and heading drift.
-                active = np.clip(elapsed - 1.0, 0, DURATION[run] - 2.0)
+                active = np.clip(elapsed - 1.0, 0, duration - 2.0)
                 local = rotation2(-start[2]) @ (pose[:2] - start[:2])
                 local = 1.045 * (rotation2(0.004 * active) @ local)
                 yaw = pose[2] - start[2] + 0.007 * active
@@ -171,7 +173,7 @@ def record(directory, run, profile, store, seed, layout="office"):
                       store.serialize_cdr(message, TOPIC_TYPES[key]))
 
 
-def generate(output, layout="office", seed=17):
+def generate(output, layout="office", seed=17, storage="sqlite3"):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
@@ -182,10 +184,11 @@ def generate(output, layout="office", seed=17):
         staging = Path(temp) / "dataset"
         staging.mkdir()
         for i, run in enumerate(DURATION):
-            record(staging, run, profile, store, seed+i, layout)
+            record(staging, run, profile, store, seed+i, layout, storage)
         (staging / "initial_pose.json").write_text(
             json.dumps(pose_at("inspection", 0, layout).tolist()) + "\n", encoding="utf-8")
-        (staging / "scenario.json").write_text(json.dumps(dict(layout=layout, seed=seed)), encoding="utf-8")
+        (staging / "scenario.json").write_text(json.dumps(dict(layout=layout, seed=seed, storage=storage)),
+                                               encoding="utf-8")
         staging.rename(output)
 
 
@@ -194,5 +197,6 @@ if __name__ == "__main__":
     parser.add_argument("out", type=Path, help="New directory for a synthetic data set")
     parser.add_argument("--layout", choices=["office", "corridor"], default="office")
     parser.add_argument("--seed", type=int, default=17)
+    parser.add_argument("--storage", choices=STORAGE, default="sqlite3", help="ROS 2 storage format")
     args = parser.parse_args()
-    generate(args.out, args.layout, args.seed)
+    generate(args.out, args.layout, args.seed, args.storage)

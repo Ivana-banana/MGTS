@@ -4,18 +4,24 @@ import json
 import numpy as np
 import pytest
 
-from mgts_nav.bag import load_config, scans
+from mgts_nav.bag import check_recording, load_config, scans
 from mgts_nav.demo import PROFILE, generate
 
 
-def test_demo_bags_feed_the_navigation_adapter(tmp_path):
+@pytest.mark.parametrize("storage", ["sqlite3", "mcap"])
+def test_demo_bags_feed_the_navigation_adapter(tmp_path, storage):
     root = tmp_path / "demo"
-    generate(root)
+    generate(root, storage=storage)
     config = load_config(PROFILE)
     for run in ("mapping", "inspection"):
         with (root / f"{run}_truth.csv").open(newline="", encoding="utf-8") as f:
             truth = list(csv.DictReader(f))
-        observed = list(scans(root / run, config))
+        directory = root / run
+        # A standalone ROS 2 file is a supported input when the recording is a single volume.
+        extension = "db3" if storage == "sqlite3" else "mcap"
+        recording, = directory.glob(f"*.{extension}")
+        assert check_recording(recording, PROFILE) == config
+        observed = list(scans(recording, config))
         assert len(truth) == len(observed)
         assert len(observed) >= 100
         assert [s.t for s in observed] == pytest.approx([float(r["t"]) for r in truth])
