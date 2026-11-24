@@ -1,6 +1,7 @@
 """Evaluate a delayed global start using up to six scans and scan-to-scan motion."""
 import argparse
 import json
+from dataclasses import replace
 from itertools import combinations, islice
 from pathlib import Path
 from time import perf_counter
@@ -10,7 +11,7 @@ from scipy.spatial import cKDTree
 
 from .bag import load_config, scans
 from .coarse_start import estimate
-from .grid import read_map
+from .grid import Grid, read_map
 from .metrics import Pose, evaluate, read_csv, wrap
 from .slam import match, relative, track, world
 
@@ -19,22 +20,35 @@ def compose(pose, step):
     return np.r_[world(step[:2], pose), wrap(pose[2] + step[2])]
 
 
-def estimate_start(window, pixels, meta, stats):
+def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
     """Return pose at the first scan. No map-frame prior or kinematic odometry is used."""
     rows = list(islice(window, 51))
     stats['anchors'] = []
     if len(rows) < 21:
         raise ValueError('Need at least three global search slots')
-    local = [np.zeros(3)]
     for previous, current in zip(rows, rows[1:]):
         dt = current.t - previous.t
         if not 0 < dt <= .35 or min(len(previous.xy), len(current.xy)) < 12:
             raise ValueError('Gap in the local scan chain')
-        seed = np.array([0., 0., current.gyro_delta or 0.])
-        step, _, ok = match(current.xy, cKDTree(previous.xy), seed)
-        if not ok:
-            raise ValueError('Unsupported local scan-to-scan motion')
-        local.append(compose(local[-1], step))
+    if local_method == 'keyframes':
+        stripped = (replace(scan, odom=None, gyro_delta=scan.gyro_delta if i else None)
+                    for i, scan in enumerate(rows))
+        local = []
+        for row in track(stripped, np.zeros(3), grid=Grid(.08)):
+            if row.status == 'prediction_only':
+                raise ValueError('Unsupported local keyframe motion')
+            local.append(row.pose)
+    elif local_method == 'pairwise':
+        local = [np.zeros(3)]
+        for previous, current in zip(rows, rows[1:]):
+            seed = np.array([0., 0., current.gyro_delta or 0.])
+            step, _, ok = match(current.xy, cKDTree(previous.xy), seed)
+            if not ok:
+                raise ValueError('Unsupported local scan-to-scan motion')
+            local.append(compose(local[-1], step))
+    else:
+        raise ValueError(f'Unknown local method: {local_method}')
+    stats['local_end'] = local[-1].tolist()
 
     starts, anchors = [], []
     for i in range(0, len(rows), 10):
@@ -67,6 +81,7 @@ def main():
     for name in ('bag', 'profile', 'map'):
         parser.add_argument(name)
     parser.add_argument('--reference', help='Evaluate a completed search against a held-out CSV')
+    parser.add_argument('--local-method', choices=['pairwise', 'keyframes'], default='pairwise')
     parser.add_argument('--pose-out', type=Path, help='New JSON file usable as localize --initial-file')
     args = parser.parse_args()
     cfg = load_config(args.profile)
@@ -74,7 +89,7 @@ def main():
     report = {}
     tick = perf_counter()
     try:
-        start = estimate_start(scans(args.bag, cfg), pixels, meta, report)
+        start = estimate_start(scans(args.bag, cfg), pixels, meta, report, local_method=args.local_method)
     except ValueError as exc:
         report.update(outcome='refused', reason=str(exc), search_s=perf_counter() - tick)
         print(json.dumps(report, indent=2, allow_nan=False))
