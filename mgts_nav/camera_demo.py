@@ -11,13 +11,13 @@ BASE_FROM_CAMERA = [-0.5, 0.5, -0.5, 0.5]
 CAMERA_HEIGHT = 1.0
 
 
-def _visible_markers(points, pose, walls, rng, stripe):
+def _visible_markers(points, pose, walls, rng, stripe, noise_px):
     dx, dy = points[:, 0] - pose[0], points[:, 1] - pose[1]
     c, s = np.cos(pose[2]), np.sin(pose[2])
     depth = c * dx + s * dy
     right, down = s * dx - c * dy, CAMERA_HEIGHT - points[:, 2]
     uv = np.column_stack((320 + 420 * right / depth, 240 + 420 * down / depth))
-    uv += rng.normal(0., .15, uv.shape)
+    uv += rng.normal(0., noise_px, uv.shape)
     keep = (depth > 0) & ((uv >= 0) & (uv < [640, 480])).all(axis=1)
     # Treat lidar obstacles as vertical opaque partitions between the lens and the panel.
     for a, b in walls:
@@ -34,7 +34,7 @@ def _visible_markers(points, pose, walls, rng, stripe):
     return uv, keep
 
 
-def write_camera_pairs(path, seed, pose_at, walls, start_ns):
+def write_camera_pairs(path, seed, pose_at, walls, start_ns, *, noise_px=.15):
     """Only the simulator sees the analytic path. Emit observations on the ROS header clock."""
     rng = np.random.default_rng(seed)
     markers = np.column_stack((np.full(200, 5.2), rng.uniform(-1.9, 4.7, 200),
@@ -48,7 +48,7 @@ def write_camera_pairs(path, seed, pose_at, walls, start_ns):
             sec, ns = divmod(start_ns + dt, 1_000_000_000)
             t = sec + ns * 1e-9
             uv, mask = _visible_markers(markers, pose_at('inspection', elapsed), walls, rng,
-                                        stripe=5.1 <= elapsed < 5.35)
+                                        stripe=5.1 <= elapsed < 5.35, noise_px=noise_px)
             if previous_mask is not None:
                 ids = np.flatnonzero(previous_mask & mask)
                 end = uv[ids].copy()

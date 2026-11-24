@@ -102,7 +102,7 @@ def lidar_points(pose, elapsed, profile, rng, walls=WALLS, dropout=0.10):
 
 
 def record(directory, run, profile, store, seed, layout="office", storage="sqlite3", *, duration=None,
-           camera_stress=False):
+           camera_stress=False, trajectory=pose_at):
     duration = DURATION[run] if duration is None else duration
     rng = np.random.default_rng(seed)
     types = store.types
@@ -111,7 +111,7 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
     field = types["sensor_msgs/msg/PointField"]
     fields = [field(name, 4 * idx, 7, 1) for idx, name in enumerate("xyz")]
     zero_cov = np.zeros(36)
-    start = pose_at(run, 0.0, layout, duration)
+    start = trajectory(run, 0.0, layout, duration)
     walls = WALLS
     if layout == "corridor":
         # A long narrow hall with asymmetric recesses; a side door swings between runs.
@@ -139,7 +139,7 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
             ns = START_NS[run] + dt_ns
             t = types["builtin_interfaces/msg/Time"](*divmod(ns, 1_000_000_000))
             header = types["std_msgs/msg/Header"](t, profile[f"{key}_frame"])
-            pose = pose_at(run, elapsed, layout, duration)
+            pose = trajectory(run, elapsed, layout, duration)
             if key == "lidar":
                 xyz = lidar_points(pose, elapsed, profile, rng, walls, 0.35 if layout == "corridor" else 0.10)
                 if camera_stress and 4 <= elapsed < 6:
@@ -149,8 +149,8 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
                     xyz.view(np.uint8).ravel(), True)
                 rows.writerow([f"{ns / 1e9:.9f}", *pose])
             elif key == "imu":
-                rate = (pose_at(run, elapsed + 0.001, layout, duration)[2]
-                        - pose_at(run, elapsed - 0.001, layout, duration)[2]) / 0.002
+                rate = (trajectory(run, elapsed + 0.001, layout, duration)[2]
+                        - trajectory(run, elapsed - 0.001, layout, duration)[2]) / 0.002
                 gyro = inverse_imu.apply([0.0, 0.0, rate + 0.015])
                 gyro += rng.normal(0.0, 0.002, 3)
                 if camera_stress and 4.8 <= elapsed < 6:
