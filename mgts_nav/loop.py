@@ -48,7 +48,7 @@ def diagnose(first_xy, last_xy, trajectory):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.loop', description=__doc__)
     parser.add_argument('bag', type=Path)
     parser.add_argument('trajectory', type=Path)
     parser.add_argument('--config', required=True, type=Path)

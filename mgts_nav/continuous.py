@@ -123,7 +123,8 @@ def reconstruct(anchors, odom, gap):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.continuous', description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('bag', type=Path)
     parser.add_argument('scan_csv', type=Path)
     parser.add_argument('output_csv', type=Path)

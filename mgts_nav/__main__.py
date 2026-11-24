@@ -192,16 +192,35 @@ def run(args, output):
     print(json.dumps(summary))
 
 
+BAG_HELP = 'ROS 2 recording directory (with metadata.yaml), a .mcap/.db3 file or a ROS 1 .bag'
+COMMANDS = {
+    'map': ('Build an occupancy map (map.yaml, map.pgm) and the route from the mapping recording',
+            'Mapping recording'),
+    'localize': ('Localize the inspection recording in a map built by the map command',
+                 'Inspection recording'),
+    'baseline': ('Dead-reckon the recording from raw odometry and a known start, for comparison',
+                 'Recording with odometry'),
+}
+EPILOG = '''other modules (each has --help):
+  python -m mgts_nav.solve     map + localize for a mapping/inspection pair
+  python -m mgts_nav.profile   draft a sensor profile from a recording
+  python -m mgts_nav.metrics   ATE/RPE of a trajectory against ground truth
+  python -m mgts_nav.rehearse  full demo on synthetic recordings'''
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog='python -m mgts_nav', description=__doc__, epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
-    survey = sub.add_parser('inspect', help='List topics, frames, fields, timing and gaps')
-    survey.add_argument('bag', type=Path)
+    survey = sub.add_parser('inspect', help='List topics, frames, fields, timing and gaps',
+                            description='List topics, frames, fields, timing and gaps of a recording.')
+    survey.add_argument('bag', type=Path, help=BAG_HELP)
     survey.add_argument('--inventory', action='store_true', help='Read metadata only; skip message payloads')
-    for name in ('map', 'localize', 'baseline'):
-        p = sub.add_parser(name)
-        p.add_argument('bag', type=Path)
-        p.add_argument('--config', required=True, type=Path)
+    for name, (summary, bag_help) in COMMANDS.items():
+        p = sub.add_parser(name, help=summary, description=summary + '.')
+        p.add_argument('bag', type=Path, help=f'{bag_help}. {BAG_HELP}')
+        p.add_argument('--config', required=True, type=Path, help='Sensor profile JSON for this recording')
         p.add_argument('--out', required=True, type=Path, help='A new output directory')
         if name != 'baseline':
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
@@ -217,7 +236,7 @@ def main():
         if name == 'localize':
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
-            p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
+            p.add_argument('--map', type=Path, required=True, help='map.yaml written by the map command')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
     args = parser.parse_args()
     try:
@@ -225,7 +244,7 @@ def main():
             print(json.dumps(inspect_bag(args.bag, args.inventory), indent=2))
             return
         if args.out.exists():
-            parser.error(f'Output already exists: {args.out}. Choose a new directory.')
+            parser.exit(2, f'Output already exists: {args.out}. Choose a new directory.\n')
         args.out.parent.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(dir=args.out.parent) as tmp:
             stage = Path(tmp) / 'result'

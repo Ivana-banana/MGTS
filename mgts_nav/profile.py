@@ -105,7 +105,7 @@ def draft_profile(path, *, lidar=None, imu=None, odom=None, base=None, tf_topic=
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.profile', description=__doc__)
     parser.add_argument('bag', type=Path)
     for role in TYPES:
         parser.add_argument('--' + role)

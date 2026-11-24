@@ -146,3 +146,14 @@ def test_ctrl_c_prints_one_line_and_leaves_no_output(demo, tmp_path, command, de
     assert proc.returncode == 130, err
     assert err.strip() == 'Interrupted; no output directory was created'
     assert sorted(p.name for p in tmp_path.iterdir()) == []
+
+
+def test_help_shows_module_command_and_describes_subcommands():
+    run = cli('mgts_nav', '--help')
+    assert run.stdout.startswith('usage: python -m mgts_nav ')
+    for summary in ('Build an occupancy map', 'Localize the inspection recording', 'Dead-reckon'):
+        assert summary in run.stdout
+    for command in ('map', 'localize', 'baseline'):
+        assert 'metadata.yaml' in cli('mgts_nav', command, '--help').stdout
+    solve = cli('mgts_nav.solve', '--help').stdout
+    assert solve.startswith('usage: python -m mgts_nav.solve ') and 'Inspection recording' in solve

@@ -113,9 +113,9 @@ def evaluate(estimate, truth, max_gap_s=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("estimate")
-    parser.add_argument("truth")
+    parser = argparse.ArgumentParser(prog="python -m mgts_nav.metrics", description=__doc__)
+    parser.add_argument("estimate", help="Estimated trajectory CSV with columns t,x,y,yaw (comma-separated)")
+    parser.add_argument("truth", help="Ground-truth trajectory CSV in the same map frame and columns")
     parser.add_argument("--max-gap-s", type=float, help="Maximum continuous sample interval in seconds")
     args = parser.parse_args()
     try:

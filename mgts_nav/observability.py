@@ -57,7 +57,7 @@ def diagnose(xy, *, radius_m=.35, neighbors=12, max_variance_ratio=.08):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.observability', description=__doc__)
     parser.add_argument('--bag', type=Path, help='Use the first processed lidar scan')
     parser.add_argument('--config', type=Path)
     args = parser.parse_args()

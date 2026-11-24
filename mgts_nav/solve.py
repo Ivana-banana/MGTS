@@ -117,20 +117,25 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mapping', type=Path)
-    parser.add_argument('inspection', type=Path)
-    parser.add_argument('--config', required=True, type=Path)
-    parser.add_argument('--inspection-config', type=Path, help='Override mapping sensor profile')
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.solve', description=__doc__)
+    parser.add_argument('mapping', type=Path,
+                        help='Mapping recording (the full walk-through used for the map). Pass the directory with metadata.yaml, a .mcap/.db3 file or a ROS 1 .bag')
+    parser.add_argument('inspection', type=Path, help='Inspection recording, localized in that map')
+    parser.add_argument('--config', required=True, type=Path,
+                        help='Sensor profile JSON (for both recordings by default)')
+    parser.add_argument('--inspection-config', type=Path,
+                        help='Sensor profile JSON for the inspection, if it differs')
     start = parser.add_mutually_exclusive_group()
     start.add_argument('--confirm-start', action='store_true',
                        help='Verify an accepted single-scan start using later scans and odometry')
-    start.add_argument('--initial', type=pose_number, nargs=3, metavar=('X', 'Y', 'YAW'), help=INITIAL_HELP)
-    parser.add_argument('--out', required=True, type=Path)
-    parser.add_argument('--close-loop', action='store_true')
-    parser.add_argument('--mapping-visual-pairs', type=Path)
-    parser.add_argument('--inspection-visual-pairs', type=Path)
-    parser.add_argument('--recover', action='store_true')
+    start.add_argument('--initial', type=pose_number, nargs=3, metavar=('X', 'Y', 'YAW'),
+                       help=INITIAL_HELP)
+    parser.add_argument('--out', required=True, type=Path, help='A new output directory')
+    parser.add_argument('--close-loop', action='store_true',
+                        help='Optimize mapping poses if the endpoint revisit is supported')
+    for role in ('mapping', 'inspection'):
+        parser.add_argument(f'--{role}-visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
+    parser.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
     args = parser.parse_args()
     try:
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,

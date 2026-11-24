@@ -49,7 +49,7 @@ def evaluate_map(points, segments, resolution, tolerance):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="python -m mgts_nav.map_eval", description=__doc__)
     parser.add_argument("map", help="map.yaml from synthetic mapping, anchored at [0,0,0]")
     parser.add_argument("--tolerance", type=float, default=0.12, help="Distance in metres")
     args = parser.parse_args()
