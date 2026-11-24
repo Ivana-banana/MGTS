@@ -26,7 +26,7 @@ def compare(directory, seed):
     for mode in ('off', 'on'):
         output = directory / mode / 'inspection'
         poses = read_csv(output / 'trajectory.csv')
-        summary = json.loads((output / 'summary.json').read_text())
+        summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
         modes[mode] = dict(route=evaluate(poses, truth), weak_lidar=evaluate(poses, weak),
                            initial_pose=summary['initial_pose'], status=summary['status'],
                            visual=summary.get('visual_yaw'))

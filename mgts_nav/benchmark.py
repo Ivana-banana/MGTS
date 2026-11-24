@@ -81,7 +81,7 @@ def benchmark(demo, config):
                                     "--initial-file", demo / "initial_pose.json",
                                     "--config", config, "--out", loc_dir])
             for phase, output in [(mapping, map_dir), (localization, loc_dir)]:
-                n = json.loads((output / "summary.json").read_text())["scans"]
+                n = json.loads((output / "summary.json").read_text(encoding="utf-8"))["scans"]
                 phase["scans_per_s"] = n / phase["wall_s"]
             metrics = evaluate(read_csv(loc_dir / "trajectory.csv"), truth)
             with Image.open(map_dir / "map.pgm") as image:

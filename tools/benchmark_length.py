@@ -64,7 +64,7 @@ def measure(arguments, log):
 
 def prefix_error(short, long):
     def read(directory):
-        with (directory / 'trajectory.csv').open(newline='') as stream:
+        with (directory / 'trajectory.csv').open(encoding='utf-8-sig', newline='') as stream:
             return list(csv.DictReader(stream))
     a, b = read(short), read(long)
     if not a or len(b) < len(a):
