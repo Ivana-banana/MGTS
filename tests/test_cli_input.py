@@ -48,3 +48,15 @@ def test_metadata_file_instead_of_recording_directory(demo, tmp_path):
     run = cli('mgts_nav', 'map', demo / 'mapping' / 'metadata.yaml', '--config', PROFILE,
               '--out', tmp_path / 'out')
     refused(run, f'Pass the recording directory {demo / "mapping"}')
+
+
+def localize(demo, tmp_path, *options, map_path=None):
+    return cli('mgts_nav', 'localize', demo / 'inspection', '--config', PROFILE,
+               '--map', map_path or demo / 'map' / 'map.yaml', *options, '--out', tmp_path / 'out')
+
+
+@pytest.mark.parametrize('name, phrase', [('map.pgm', 'needs map.yaml'), ('', 'not a directory'),
+                                          ('bad.yaml', 'not a map.yaml')])
+def test_map_option_names_map_yaml(demo, tmp_path, name, phrase):
+    (demo / 'map' / 'bad.yaml').write_text('just text')
+    refused(localize(demo, tmp_path, '--initial', 0, 0, 0, map_path=demo / 'map' / name), phrase)

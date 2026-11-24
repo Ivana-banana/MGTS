@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
+import yaml
 
 from .bag import inspect_bag, load_config, scans
 from .grid import Grid, preview, read_map
@@ -16,6 +17,19 @@ from .slam import relative, track, world
 
 class MissingBaselineAnchor(ValueError):
     """The first scan has no synchronized kinematic position."""
+
+
+def load_map(path):
+    """Read the map.yaml written by `map`, naming the expected file on typical mistakes."""
+    if path.is_dir():
+        raise ValueError(f'--map needs the map.yaml file, not a directory: try {path / "map.yaml"}')
+    if path.suffix.lower() not in ('.yaml', '.yml'):
+        raise ValueError(f'--map needs map.yaml from the map command, not {path.name}: '
+                         f'try {path.with_name("map.yaml")}')
+    try:
+        return read_map(path)
+    except (KeyError, TypeError, IndexError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError(f'{path}: not a map.yaml written by the map command ({exc})') from exc
 
 
 def initial_pose(args):
@@ -41,7 +55,7 @@ def run(args, output):
     recovery = None
     if args.command == 'localize':
         map_path = args.map
-        pixels, meta, points = read_map(map_path)
+        pixels, meta, points = load_map(map_path)
         if args.recover:
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
