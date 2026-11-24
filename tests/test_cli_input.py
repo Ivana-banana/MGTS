@@ -113,12 +113,17 @@ def test_continuous_short_row_names_the_line(demo, tmp_path):
     ['mgts_nav.loop', '{mapping}', '{missing}', '--config', PROFILE],
     ['mgts_nav.loop', '{mapping}', '{text}', '--config', PROFILE],
     ['mgts_nav.map_eval', '{missing}'],
+    ['mgts_nav.map_eval', '{broken}'],
 ])
 def test_auxiliary_clis_report_input_errors(demo, tmp_path, command):
     text = tmp_path / 'words.csv'
     text.write_text('t,x,y,yaw\na,b,c,d\n')
-    names = dict(mapping=demo / 'mapping', missing=tmp_path / 'missing.csv', text=text)
-    refused(cli(*[str(a).format(**names) for a in command]))
+    broken = tmp_path / 'broken.yaml'
+    broken.write_text('image: map.pgm\nresolution: [\n')
+    names = dict(mapping=demo / 'mapping', missing=tmp_path / 'missing.csv', text=text, broken=broken)
+    run = cli(*[str(a).format(**names) for a in command])
+    refused(run)
+    assert len(run.stderr.strip().splitlines()) == 1, run.stderr
 
 
 @pytest.mark.parametrize('command, delay, group', [

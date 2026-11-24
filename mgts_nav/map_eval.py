@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 from scipy.spatial import cKDTree
+import yaml
 
 from .demo import WALLS
 from .grid import read_map
@@ -55,6 +56,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         _, meta, points = read_map(args.map)
-    except (OSError, KeyError, TypeError, ValueError) as exc:
-        parser.exit(2, f"{args.map}: cannot read map.yaml: {exc}\n")
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as exc:
+        parser.exit(2, f"{args.map}: cannot read map.yaml: {' '.join(str(exc).split())}\n")  # one line
     print(json.dumps(evaluate_map(points, WALLS, meta["resolution"], args.tolerance), indent=2))
