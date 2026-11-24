@@ -4,6 +4,8 @@
 
 Чтобы отрепетировать приём MCAP, выполните `python -m mgts_nav.demo out/mcap-demo --storage mcap`. Оба bag используют те же сенсоры и профиль `configs/example.json`, что и демо SQLite.
 
+Для репетиции на незнакомых соглашениях выполните `python tools/foreign_bags.py out/foreign`. Получатся четыре набора: (a) MCAP с топиками Ouster, базой `base_footprint` и цепочкой `/tf_static`, инспекция одним файлом `.mcap`; (b) одна общая запись обхода и инспекции; (c) организованное облако float64 с полем времени `t` в нс, наклонный лидар и калибровка только в YAML; (d) без IMU, с пропусками одометрии и сдвигом её часов на 0,25 с. Команде даётся `out/foreign/X/data`, в `truth` лежат эталонные траектории и ожидаемый профиль. Журнал прогона — в описании PR `finale-rehearsal`.
+
 | Минуты | Действие | Что должно получиться |
 |---|---|---|
 | 0–5 | Запустить инвентаризацию обеих записей. Сопоставить README организаторов с именами маршрутов и форматами файлов. | Назначение каждой записи, список topic/type/count, наличие PointCloud2, Imu, Odometry, TF и камерных данных. |
@@ -27,6 +29,16 @@ python -m mgts_nav.profile data/inspection --out inspection.draft.json
 
 Для выбора из нескольких потоков добавьте к команде профиля `--lidar TOPIC`, `--imu TOPIC` или `--odom TOPIC` с именем из `candidates`. Черновик содержит наблюдения и вопросы. Для рабочего `--config` нужен внутренний объект `profile` с проверенными значениями. По умолчанию профиль читает первый заголовок каждого соединения. Для проверки всей записи добавьте `--verify-frames` к командам построения обоих черновиков. В разделе `observed_frames` для каждого выбранного топика будут число прочитанных сообщений и все значения `header.frame_id`, а для одометрии также `child_frame_id`. При смене кадра зависимая калибровка останется пустой. Перед запуском карты или локализации сверьте значения из `questions` с описанием установки.
 
+Что смотреть в выводе `inspect` для облака: `field_types` показывает тип каждого поля (float32/float64 для x, y, z читаются оба), `cloud_layout` — организованное ли облако (`height` > 1) и есть ли NaN (`is_dense: false`; такие точки отбрасываются). Если в облаке есть поле времени точки (`t`, `time`, `offset_time` и т. п.), черновик профиля задаёт о нём отдельный вопрос. Огромное `median_record_minus_header_ms` (например, 1,76·10¹² мс) означает, что заголовки идут по часам загрузки робота, а запись — по настенным часам. Навигация использует только время заголовков, поэтому это не ошибка. Опасна разница этой величины **между топиками** в сотни миллисекунд: см. сдвиг часов ниже.
+
+Рабочий профиль — объект `profile` из черновика с заполненными `null`. Извлечь его можно так:
+
+```powershell
+python -c "import json; d=json.load(open('mapping.draft.json', encoding='utf-8'))['profile']; d.update(stationary_s=0.5, max_sync_gap_s=0.35, height_band_m=[0.15, 1.5]); json.dump(d, open('configs/official-map.json', 'w'), indent=2)"
+```
+
+Значения в `update` — стартовые из демо: покой 0,5 с, разрыв интерполяции 0,35 с, срез 0,15–1,5 м над началом базы. Если база (`child_frame_id` одометрии) лежит не на полу, срез отсчитывается от неё.
+
 ```powershell
 python -m mgts_nav.calibration data/mapping --base BODY_FRAME --lidar LIDAR_FRAME --imu IMU_FRAME
 python -m mgts_nav.sync data/mapping --config configs/official-map.json
@@ -34,7 +46,46 @@ python -m mgts_nav.sync data/inspection --config configs/official-inspection.jso
 python -m mgts_nav.solve data/mapping data/inspection --config configs/official-map.json --inspection-config configs/official-inspection.json --out out/official-01
 ```
 
-Вместо BODY_FRAME, LIDAR_FRAME и IMU_FRAME подставьте имена из данных. Для быстрого запуска только обхода используйте `python -m mgts_nav map data/mapping --config configs/official-map.json --out out/official-map-01`. Все каталоги результата должны быть новыми.
+Вместо BODY_FRAME, LIDAR_FRAME и IMU_FRAME подставьте имена из данных. Если IMU нет, `--imu` не указывайте. Для быстрого запуска только обхода используйте `python -m mgts_nav map data/mapping --config configs/official-map.json --out out/official-map-01`. Все каталоги результата должны быть новыми.
+
+### Калибровка из отдельного файла и проверка по полу
+
+Если калибровка выдана как xyz и roll/pitch/yaw в градусах «из датчика в базу», кватернион для профиля в соглашении ROS (неподвижные оси x, затем y, затем z) даёт
+
+```powershell
+python -c "from scipy.spatial.transform import Rotation as R; print(R.from_euler('xyz', [ROLL, PITCH, YAW], degrees=True).as_quat().tolist())"
+```
+
+Если в файле задан перенос «из базы в датчик», возьмите обратное вращение (`.inv()`) и пересчитайте смещение. Ошибку знака наклона или пропущенный наклон карта **не покажет**: на репетиции (c) с лидаром, наклонённым на 10°, все сканы сопоставились, а ATE выросла с 0,04 до 0,09 м без наклона и до 0,26 м с обратным знаком. Поэтому для многолучевого лидара, видящего пол, проверьте профиль:
+
+```powershell
+python -m mgts_nav.calibration data/mapping --floor configs/official-map.json
+```
+
+Команда приводит первые 10 сканов в базу и находит плоскость пола. При верной калибровке `floor_tilt_deg` меньше ~0,5°, а `floor_height_m` равна высоте пола относительно базы (около 0 для `base_footprint`). Наклон в несколько градусов означает неверное вращение лидара: положительный `floor_rise_pitch_deg` — пол «поднимается» вперёд, лидар на самом деле наклонён вниз сильнее, чем в профиле. Для однолучевого или почти плоского скана ответ `floor_observed: false`, тогда проверка по полу невозможна.
+
+### Сдвиг часов между лидаром и одометрией или IMU
+
+`sync` показывает покрытие, но не постоянный сдвиг часов. После первой карты оцените его по поворотам:
+
+```powershell
+python tools/clock_lag.py data/mapping --config configs/official-map.json --trajectory out/official-map-01/trajectory.csv
+python tools/clock_lag.py data/mapping --config configs/official-map.json --trajectory out/official-map-01/trajectory.csv --role imu
+```
+
+Выход `header_offset_s` уже имеет нужный знак и учитывает смещение, заданное в профиле. Доверять стоит при `peak_correlation` > 0,9 и сдвиге больше ~0,05 с: точность метода около ±0,03 с. На репетиции (d) одометрия опережала лидар на 0,25 с, оценка дала 0,235 с на обходе и 0,20 с на инспекции. Без поправки в простом офисе ATE не изменилась (ICP исправляет прогноз), но `continuous.csv` и базовая линия одометрии сдвинуты по времени.
+
+### Одна общая запись вместо двух
+
+Если обход и инспекция выданы одним bag, найдите остановки по одометрии и разрежьте запись по времени заголовков. `/tf_static` копируется в обе части.
+
+```powershell
+python tools/split_recording.py data/session --stops /odom
+python tools/split_recording.py data/session --from T0 --to T1 --out data/mapping
+python tools/split_recording.py data/session --from T2 --to T3 --out data/inspection
+```
+
+Границы ставьте внутри остановок, чтобы обе части начинались с покоя. Части в одной системе одометрии, но `solve` строит карту только по первой. Запуск `solve` на одной и той же записи дважды тоже работает, но тогда карта включает инспекцию, а инспекция не отделена.
 
 ### Хватит ли измерений для интерполяции
 
