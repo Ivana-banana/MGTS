@@ -16,13 +16,17 @@ from .metrics import Pose, evaluate, read_csv, wrap
 from .slam import match, relative, track, world
 
 
+START_SEARCHES = ('coarse', 'delayed', 'delayed-keyframes')
+MAX_WINDOW_SCANS = 51
+
+
 def compose(pose, step):
     return np.r_[world(step[:2], pose), wrap(pose[2] + step[2])]
 
 
 def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
     """Return pose at the first scan. No map-frame prior or kinematic odometry is used."""
-    rows = list(islice(window, 51))
+    rows = list(islice(window, MAX_WINDOW_SCANS))
     stats['anchors'] = []
     if len(rows) < 21:
         raise ValueError('Need at least three global search slots')
@@ -74,6 +78,20 @@ def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
             raise ValueError('Global poses disagree with local motion')
     x, y, angles = np.asarray(starts).T
     return np.array([np.median(x), np.median(y), np.arctan2(np.sin(angles).sum(), np.cos(angles).sum())])
+
+
+def search_prefix(stream, method, pixels, meta, diagnostics):
+    if method not in START_SEARCHES:
+        raise ValueError(f'Unknown start search: {method}')
+    prefix = list(islice(stream, 1 if method == 'coarse' else MAX_WINDOW_SCANS))
+    if not prefix:
+        raise ValueError('No lidar scans in recording')
+    if method == 'coarse':
+        start = estimate(prefix[0], pixels, meta, diagnostics)
+    else:
+        local_method = 'keyframes' if method == 'delayed-keyframes' else 'pairwise'
+        start = estimate_start(prefix, pixels, meta, diagnostics, local_method=local_method)
+    return start, prefix
 
 
 def main():

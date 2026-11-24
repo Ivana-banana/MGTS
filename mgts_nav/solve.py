@@ -8,11 +8,15 @@ import sys
 from tempfile import TemporaryDirectory
 
 from .bag import check_recording
+from .delayed_start import START_SEARCHES
 from .ros_export import export
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
-          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None):
+          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
+          start_search=None):
+    if start_search is not None and (start_search not in START_SEARCHES or initial is not None or confirm_start):
+        raise ValueError('--start-search requires a supported search and conflicts with --initial and --confirm-start')
     if initial is not None and confirm_start:
         raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
     output = Path(output)
@@ -39,6 +43,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             map_flags.extend(['--visual-pairs', mapping_visual_pairs])
         invoke('map', mapping, '--config', profiles / 'mapping.json', '--out', map_dir, *map_flags)
         options = ['--initial', *initial] if initial is not None else []
+        if start_search is not None:
+            options.extend(['--start-search', start_search])
         if inspection_visual_pairs:
             options.extend(['--visual-pairs', inspection_visual_pairs])
         if confirm_start:
@@ -80,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--inspection-config', type=Path, help='Override mapping sensor profile')
     start = parser.add_mutually_exclusive_group()
+    start.add_argument('--start-search', choices=START_SEARCHES)
     start.add_argument('--confirm-start', action='store_true',
                        help='Verify an accepted single-scan start using later scans and odometry')
     start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
@@ -93,6 +100,6 @@ if __name__ == '__main__':
     try:
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
-              args.recover, args.confirm_start, args.grid_dll)
+              args.recover, args.confirm_start, args.grid_dll, args.start_search)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

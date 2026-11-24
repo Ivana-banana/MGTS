@@ -39,6 +39,7 @@ def run(args, output):
     start = initial_pose(args)
     automatic = start is None
     start_method = 'map_origin' if args.command == 'map' else 'provided'
+    search_diagnostics = {}
     recovery = None
     if args.command == 'localize':
         map_path = args.map
@@ -46,7 +47,13 @@ def run(args, output):
         if args.recover:
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
-        if automatic:
+        search = getattr(args, 'start_search', None)
+        if search:
+            from .delayed_start import search_prefix
+            start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            stream = chain(prefix, stream)
+            start_method = search
+        elif automatic:
             from .initialization import estimate_initial
             first = next(stream, None)
             if first is None:
@@ -148,6 +155,8 @@ def run(args, output):
     summary = dict(scans=len(estimates), status=counts, final_pose=estimates[-1].pose.tolist(),
                    final_status=estimates[-1].status, initial_pose=start.tolist(),
                    initialization=start_method)
+    if search_diagnostics:
+        summary['start_search'] = search_diagnostics
     if args.command == 'localize':
         from .quality import inspection_quality
         summary['quality'] = inspection_quality(estimates)
@@ -182,6 +191,8 @@ def main():
             group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
             group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
         if name == 'localize':
+            from .delayed_start import START_SEARCHES
+            group.add_argument('--start-search', choices=START_SEARCHES, help='Choose a global pose search')
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
