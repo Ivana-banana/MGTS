@@ -9,6 +9,7 @@ import sys
 import numpy as np
 from rosbags.rosbag2 import Writer
 from rosbags.typesys import Stores, get_typestore
+from scipy.spatial.transform import Rotation
 
 from mgts_nav.bag import load_config, reader, scans, stamp
 from mgts_nav.metrics import evaluate, read_csv
@@ -33,7 +34,44 @@ def mask_rates(source, target, topic, begin, end):
     return count
 
 
-def experiment(data, solution, out):
+def fastest_second(source, cfg, start, stop):
+    mount = Rotation.from_quat(cfg['base_from_imu_xyzw'])
+    samples = []
+    with reader(source) as bag:
+        for conn, _, raw in bag.messages(connections=[c for c in bag.connections if c.topic == cfg['imu']]):
+            msg = bag.deserialize(raw, conn.msgtype)
+            if msg.angular_velocity_covariance[0] == -1 or msg.header.frame_id != cfg['imu_frame']:
+                raise ValueError('Expected valid calibrated IMU stream')
+            w = msg.angular_velocity
+            samples.append((stamp(msg)-start, mount.apply([w.x, w.y, w.z])[2]))
+    t, rate = np.asarray(samples).T
+    span = stop-start
+    if (t[0] > 0 or t[-1] < span or span < 1 or not np.isfinite(samples).all()
+            or np.any(np.diff(t) <= 0) or np.max(np.diff(t)) > cfg['max_sync_gap_s']):
+        raise ValueError('Incomplete IMU coverage')
+    # Split zero crossings before integrating the magnitude of the interpolated rate.
+    i = np.flatnonzero(rate[:-1]*rate[1:] < 0)
+    zeros = t[i] - rate[i]*(t[i+1]-t[i])/(rate[i+1]-rate[i])
+    knots = np.unique(np.r_[t, zeros])
+    speed = np.abs(np.interp(knots, t, rate))
+    integral = np.r_[0., np.cumsum(np.diff(knots)*(speed[:-1]+speed[1:])/2)]
+
+    def area(x):
+        j = np.clip(knots.searchsorted(x, side='right')-1, 0, len(knots)-2)
+        return integral[j] + (x-knots[j])*(speed[j]+np.interp(x, knots, speed))/2
+
+    # For A(x)=integral from x to x+1, A'(x)=speed(x+1)-speed(x).
+    edges = np.unique(np.clip(np.r_[0., knots, knots-1., span-1.], 0., span-1.))
+    derivative = np.interp(edges+1., knots, speed) - np.interp(edges, knots, speed)
+    j = np.flatnonzero(derivative[:-1]*derivative[1:] < 0)
+    roots = edges[j] - derivative[j]*np.diff(edges)[j]/np.diff(derivative)[j]
+    candidates = np.unique(np.r_[edges, roots])
+    areas = area(candidates+1.) - area(candidates)
+    best = int(areas.argmax())
+    return start+candidates[best]+.5, float(np.degrees(areas[best]))
+
+
+def experiment(data, solution, out, fastest=False):
     cfg = load_config(data/'profile.json')
     summary = json.loads((solution/'inspection/summary.json').read_bytes())
     if summary['initialization'] != 'delayed' or cfg.get('header_offset_s', {}).get('imu', 0) != 0:
@@ -45,6 +83,9 @@ def experiment(data, solution, out):
     t0 = clean[0].t
     center = (clean[0].t + clean[-1].t) / 2
     out.mkdir(parents=True)
+    if fastest:
+        center, degrees = fastest_second(source, cfg, t0, clean[-1].t)
+        (out/'selection.json').write_text(json.dumps(dict(center_s=center-t0, integral_abs_deg=degrees)))
     report = {}
     for label, duration in [('control', 0.), ('half', .5), ('one', 1.), ('repeat', 0.)]:
         begin, end = center - duration/2, center + duration/2
@@ -82,6 +123,8 @@ def experiment(data, solution, out):
         if metrics['coverage'] != 1.:
             raise ValueError('Incomplete CPT7 coverage')
         row.update(ate_m=metrics['ate_xy_rmse_m'], yaw_rmse_deg=np.degrees(metrics['absolute_yaw_rmse_rad']))
+        angles = np.array([p.yaw for p in est]) - [p.yaw for p in truth]
+        row['max_abs_yaw_error_deg'] = float(np.degrees(np.abs(np.arctan2(np.sin(angles), np.cos(angles)))).max())
     (out/'report.json').write_text(json.dumps(report, indent=2, allow_nan=False), encoding='utf-8')
 
 
@@ -89,5 +132,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('data', 'solution', 'output'):
         parser.add_argument(name, type=Path)
+    parser.add_argument('--fastest', action='store_true', help='Center outages on the fastest IMU second')
     args = parser.parse_args()
-    experiment(args.data, args.solution, args.output)
+    experiment(args.data, args.solution, args.output, args.fastest)
