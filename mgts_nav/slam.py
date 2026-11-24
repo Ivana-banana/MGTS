@@ -68,6 +68,23 @@ def match(scan, tree, seed, radius=0.45):
     return pose, fraction, True
 
 
+def surface_points(points):
+    """Replace grid cell centres by the mean of their occupied 3x3 neighbourhood.
+
+    Cell centres of an occupancy grid describe a wall as a staircase that is
+    offset by up to half a cell. The neighbourhood mean puts each point on the
+    local wall line, so ICP is not biased toward one row of cells. The cell
+    size is the median spacing between neighbouring map points.
+    """
+    points = np.asarray(points, dtype=float)
+    tree = cKDTree(points)
+    spacing = np.median(tree.query(points, k=2)[0][:, 1])
+    if not np.isfinite(spacing) or spacing <= 0:
+        return points
+    neighbours = tree.query_ball_point(points, 1.5 * spacing)
+    return np.array([points[ids].mean(axis=0) for ids in neighbours])
+
+
 @dataclass
 class Estimate:
     t: float
@@ -84,7 +101,7 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None):
     pose = np.asarray(initial, dtype=float)
     if pose.shape != (3,) or not np.isfinite(pose).all():
         raise ValueError('initial pose must contain finite x, y, yaw')
-    tree = None if building else cKDTree(map_points)
+    tree = None if building else cKDTree(surface_points(map_points))
     previous = None
     keyframes = deque(maxlen=18)
     keypose = None
