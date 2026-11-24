@@ -3,8 +3,8 @@
 Команда читает траекторию локализации и именованные полигоны. JSON содержит `"frame": "map"` и объект `zones`. Каждому имени соответствует список вершин `[x, y]` простого полигона в метрах системы карты, в порядке обхода. Замыкающее ребро добавляется автоматически. Граница входит в зону. Пересекающиеся зоны учитываются по отдельности.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
-& $python -m mgts_nav.zones out/inspection-result/trajectory.csv configs/demo-zones.json --max-gap 0.25
+$python = '.\.venv-mgts\Scripts\python.exe'
+& $python -m mgts_nav.zones out/my-first-demo/inspection/trajectory.csv configs/demo-zones.json --max-gap 0.25
 ```
 
 Для записи в новый CSV добавьте `--out out/zone-visits.csv`. Пример результата в `docs/demo-zone-visits.csv`. На демонстрационной инспекции с частотой 10 Гц робот прошёл западную зону за 13 подтверждённых отсчётов, северную за 21. Обе границы каждого посещения наблюдались. Имена и вершины демонстрационных зон условны.

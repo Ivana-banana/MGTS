@@ -44,12 +44,11 @@ python -m mgts_nav.benchmark out/runtime-data
 
 **Условия измерения.** AMD Ryzen 5 5500U, 12 логических процессоров, Windows 10 19044, AMD64, Python 3.10.10. Один запуск на вариант на общей машине. Wall time включает старт отдельного процесса, чтение bag и запись результатов. Наблюдатель с интервалом около 20 мс суммирует RSS процесса CLI и его живых потомков и берёт максимум. Короткие пики между отсчётами могут быть пропущены, общие страницы разных процессов могут учитываться несколько раз. Создание входов и память наблюдателя в измерение не входят. Масштаб офиса и площадь карты фиксированы. Измеренный диапазон не позволяет предсказать предел памяти для большего здания.
 
-**Повторить из корня MGTS в PowerShell.** Для наблюдателя требуется psutil. При локальной установке в `out/` команды такие:
+**Повторить из корня MGTS в PowerShell.** Установите psutil в окружение проекта.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
-& $python -m pip install --target out/benchmark-length-deps psutil==7.0.0
-$env:PYTHONPATH = (Resolve-Path out/benchmark-length-deps).Path
+$python = '.\.venv-mgts\Scripts\python.exe'
+& $python -m pip install psutil==7.0.0
 & $python -m tools.benchmark_length out/length-benchmark-new
 ```
 

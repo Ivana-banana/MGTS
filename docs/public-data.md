@@ -30,9 +30,8 @@
 Для конвертера нужен дополнительный пакет numcodecs. Команды рассчитаны на новые выходные каталоги. Копии исходных данных и результаты остаются в `out/`.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
-& $python -m pip install numcodecs==0.13.1 --target out/heap1-codec --no-deps
-$env:PYTHONPATH = (Resolve-Path out/heap1-codec).Path
+$python = '.\.venv-mgts\Scripts\python.exe'
+& $python -m pip install numcodecs==0.13.1
 & $python tools/heap1_sample.py out/heap1-sample
 & $python -m mgts_nav inspect out/heap1-sample/mapping
 & $python -m mgts_nav inspect out/heap1-sample/inspection

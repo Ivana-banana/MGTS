@@ -7,7 +7,7 @@
 Из корня MGTS в локальном Windows PowerShell выберите ревизию и создайте новый ZIP на томе NTFS. Повторная сборка той же ревизии тем же упаковщиком даёт побайтово одинаковый файл. Git отдаёт содержимое коммита, поэтому параллельные правки рабочего дерева и настройки окончаний строк не влияют на архив.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 $revision = git rev-parse HEAD
 $archive = "out\packages\mgts-$revision.zip"
 & $python tools/package_solution.py $archive --revision $revision
