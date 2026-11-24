@@ -6,6 +6,21 @@ import sys
 import yaml
 
 from mgts_nav.demo import PROFILE, generate
+from tools.package_solution import build
+
+
+def rename_volumes(data):
+    for role, name in [('mapping', 'Измерения обхода.db3'), ('inspection', 'Инспекция офиса.db3')]:
+        bag = data / role
+        metadata = bag / 'metadata.yaml'
+        document = yaml.safe_load(metadata.read_bytes())
+        info = document['rosbag2_bagfile_information']
+        original, = info['relative_file_paths']
+        (bag / original).rename(bag / name)
+        info['relative_file_paths'] = [name]
+        info['files'][0]['path'] = name
+        metadata.write_text(yaml.safe_dump(document, allow_unicode=True), encoding='utf-8')
+        assert name.encode('utf-8') in metadata.read_bytes()
 
 
 def test_utf8_volume_names_through_cli(tmp_path):
@@ -14,17 +29,7 @@ def test_utf8_volume_names_through_cli(tmp_path):
     control = {}
     for mode, variant in [('0', 'ascii'), ('0', 'unicode'), ('1', 'unicode')]:
         if variant == 'unicode' and mode == '0':
-            for role, name in [('mapping', 'Измерения обхода.db3'), ('inspection', 'Инспекция офиса.db3')]:
-                bag = data / role
-                metadata = bag / 'metadata.yaml'
-                document = yaml.safe_load(metadata.read_bytes())
-                info = document['rosbag2_bagfile_information']
-                original, = info['relative_file_paths']
-                (bag / original).rename(bag / name)
-                info['relative_file_paths'] = [name]
-                info['files'][0]['path'] = name
-                metadata.write_text(yaml.safe_dump(document, allow_unicode=True), encoding='utf-8')
-                assert name.encode('utf-8') in metadata.read_bytes()
+            rename_volumes(data)
 
         env = dict(os.environ, PYTHONUTF8=mode)
         enc = json.loads(subprocess.check_output([sys.executable, '-c',
@@ -57,3 +62,37 @@ def test_utf8_volume_names_through_cli(tmp_path):
                 control[key] = result
             else:
                 assert result == control[key]
+
+
+def test_solve_children_inherit_utf8_mode(tmp_path):
+    data = tmp_path / 'recordings'
+    generate(data)
+    rename_volumes(data)
+    archive = tmp_path / 'runtime.zip'
+    archive.write_bytes(build('HEAD')[1])
+    probe = """
+import subprocess, sys
+location, mode = sys.argv[1:]
+if location:
+    sys.path.insert(0, location)
+from mgts_nav.solve import module_command
+condition = f'import sys, mgts_nav; assert sys.flags.utf8_mode == {mode}'
+if location:
+    condition += f'; from pathlib import Path; assert Path({location!r}) in Path(mgts_nav.__file__).parents'
+subprocess.run(module_command('timeit', '-n', '1', '-r', '1', condition), check=True)
+"""
+    for label, location in [('git', ''), ('zip', str(archive))]:
+        isolation = ['-I'] if location else []
+        for mode in (0, 1):
+            subprocess.run([sys.executable, *isolation, '-X', f'utf8={mode}', '-c', probe, location, str(mode)],
+                           env=dict(os.environ, PYTHONUTF8=str(1-mode)), check=True)
+        startup = ['-m', 'mgts_nav.solve']
+        if location:
+            startup = ['-c', "import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); "
+                       "runpy.run_module('mgts_nav.solve', run_name='__main__', alter_sys=True)", location]
+        subprocess.run([sys.executable, *isolation, '-X', 'utf8=1', *startup,
+                        str(data/'mapping'), str(data/'inspection'), '--config', str(PROFILE),
+                        '--out', str(tmp_path/label)], env=dict(os.environ, PYTHONUTF8='0'), check=True)
+    for path in ('map/map.pgm', 'map/map.yaml', 'map/trajectory.csv', 'inspection/trajectory.csv',
+                 'inspection/continuous.csv', 'baseline/trajectory.csv'):
+        assert (tmp_path/'zip'/path).read_bytes() == (tmp_path/'git'/path).read_bytes()

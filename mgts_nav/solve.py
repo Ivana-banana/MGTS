@@ -15,13 +15,14 @@ from .zones import load_zones, read_visits, write_visits
 
 
 def module_command(module, *args):
+    python = [sys.executable, '-X', f'utf8={sys.flags.utf8_mode}']
     archive = getattr(__loader__, 'archive', None)
     if archive:
         # A fresh interpreter does not inherit the parent's zipimport search path.
         bootstrap = ("import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); "
                      "runpy.run_module(sys.argv.pop(1), run_name='__main__', alter_sys=True)")
-        return [sys.executable, '-I', '-c', bootstrap, str(Path(archive).resolve()), module, *map(str, args)]
-    return [sys.executable, '-m', module, *map(str, args)]
+        return [*python, '-I', '-c', bootstrap, str(Path(archive).resolve()), module, *map(str, args)]
+    return [*python, '-m', module, *map(str, args)]
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,

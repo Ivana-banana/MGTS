@@ -68,7 +68,7 @@ python -m mgts_nav.solve data/mapping data/inspection --config configs/official-
 
 ### Запись ROS 2 из нескольких томов
 
-Если имя тома в UTF-8-файле `metadata.yaml` содержит кириллицу, перед запуском команд в PowerShell задайте `$env:PYTHONUTF8 = '1'`. Это значение наследуют дочерние процессы `solve`. На Windows с Python 3.10.10, rosbags 0.11.5 и системной кодировкой cp1251 имена `Измерения обхода.db3` и `Инспекция офиса.db3` привели к коду 2 у `inspect`, `profile` и `solve` при `PYTHONUTF8=0`: декодирование метаданных остановилось на байте 0x98. При `PYTHONUTF8=1` все три команды вернули 0; карта и траектории побайтово совпали с контролем на ASCII-именах. Флаг `python -X utf8` помог при отдельном запуске `inspect`, но при `PYTHONUTF8=0` дочерний `map` в составе `solve` снова использовал cp1251. Проверка: `python -m pytest -q -s tests/test_unicode_volume.py`.
+Если имя тома в UTF-8-файле `metadata.yaml` содержит кириллицу, используйте `python -X utf8 -m mgts_nav.solve ...`. Для нескольких команд в PowerShell можно задать `$env:PYTHONUTF8 = '1'`. При изолированном запуске из ZIP (`python -I`) задайте `-X utf8` явно: `-I` игнорирует переменные среды Python. Этапы `map`, `localize`, `baseline` и `continuous` наследуют фактический режим родителя. На Windows с Python 3.10.10, rosbags 0.11.5 и системной кодировкой cp1251 отключение режима UTF-8 приводит к ошибке чтения имени `Измерения обхода.db3` на байте 0x98. Проверка: `python -m pytest -q -s tests/test_unicode_volume.py`.
 
 Передайте в `solve` каталог с `metadata.yaml` и всеми файлами из `relative_file_paths`. Проверка из корня проекта в PowerShell:
 
