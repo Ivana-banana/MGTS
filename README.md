@@ -8,9 +8,9 @@
 - **Полевые сканы.** Открытая миссия GrandTour HEAP-1 лаборатории Robotic Systems Lab, ETH Zürich, записана 14 ноября 2024 года. Адаптер читает измерения лидара Velodyne VLP-16 из опубликованной версии миссии и сохраняет выбранные окна в ROS 2. [Ревизия данных](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset/tree/af6b6dd6f91696f8ec8c98134e195514834911b2/2024-11-14-13-45-37) · [Адаптер](https://github.com/Ivana-banana/MGTS/blob/9bab80b7b989289081e46c72066a9d08dd4d8efa/tools/heap1_sample.py) · [Команды воспроизведения](docs/public-data.md)
 - **Записи финала МГТС.** Команда ожидает обход и инспекцию от организаторов. Подключение этих записей и проверка на них ведутся в [задаче №6](https://github.com/Ivana-banana/MGTS/issues/6).
 
-[Короткий ответ для квалификационной формы](docs/qualification.txt) · [Первые 30 минут с данными финала](docs/intake.md) · [Распределение работы](COORDINATION.md)
+[Короткий ответ для квалификационной формы](docs/qualification.txt) · [Первые 30 минут с данными финала](docs/intake.md) · [Как взять задачу](COORDINATION.md)
 
-Участники могут взять [открытую задачу с меткой ready](https://github.com/Ivana-banana/MGTS/issues?q=is%3Aissue%20is%3Aopen%20label%3Aready). Задачи с меткой `awaiting-data` требуют материалов финала. При старте назначьте issue на себя и укажите номер в PR.
+Рабочая очередь команды — GitHub Issues. Выберите открытую задачу без исполнителя, проверьте условия приёмки и назначьте её на себя. Метка `ready` выделяет подготовленные задачи; свободные задачи могут быть и без неё. После проверки опубликуйте изменения и укажите в issue коммит или PR, команду проверки и результат. [Свободные задачи](https://github.com/Ivana-banana/MGTS/issues?q=is%3Aissue%20is%3Aopen%20no%3Aassignee%20-label%3Aawaiting-data) · [Свободные с меткой ready](https://github.com/Ivana-banana/MGTS/issues?q=is%3Aissue%20is%3Aopen%20no%3Aassignee%20label%3Aready%20-label%3Aawaiting-data)
 
 ## Проверить за один запуск
 
