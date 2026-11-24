@@ -13,7 +13,7 @@
 ## Запуск из корня MGTS в Windows PowerShell
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m mgts_nav.plan_alignment docs/office-plan.png docs/plan-landmarks.json out/inspection-result/trajectory.csv --fit-scale --out out/plan-registration
 ```
 

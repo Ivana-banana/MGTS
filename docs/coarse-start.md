@@ -30,7 +30,7 @@
 Сначала подготовить данные и карту по разделу о повторном посещении в [инструкции HEAP-1](public-data.md). Из корня MGTS в Windows PowerShell:
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 $data = 'out/heap1-revisit-v2'
 & $python -m mgts_nav.start_trial "$data/inspection" "$data/profile.json" out/heap1-revisit-map/map.yaml "$data/inspection-reference.csv"
 & $python -m pytest -q tests/test_coarse_start_budget.py tests/test_initialization.py tests/test_multiscan.py

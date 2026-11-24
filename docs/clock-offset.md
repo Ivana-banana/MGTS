@@ -3,7 +3,7 @@
 Воспроизведение из корня MGTS в Windows PowerShell, на стандартном офисе с начальным seed 17:
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m mgts_nav.demo out/clock-demo
 & $python -m mgts_nav.clock_experiment out/clock-demo
 ```
