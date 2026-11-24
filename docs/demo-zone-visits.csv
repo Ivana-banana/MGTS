@@ -1,0 +1,3 @@
+zone,first_inside_t,last_inside_t,entry_observed,exit_observed,samples
+west_passage,251.635,252.835,1,1,13
+north_passage,254.235,256.235,1,1,21

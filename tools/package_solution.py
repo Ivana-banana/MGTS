@@ -14,13 +14,13 @@ MODULES = (
     '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'continuous', 'demo',
     'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
     'multiscan', 'observability', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
-    'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion',
+    'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
-    'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz',
+    'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
-    'docs/sensors.md', 'docs/start-confirmation.md',
+    'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
     *(f'mgts_nav/{name}.py' for name in MODULES),
 )))
 
