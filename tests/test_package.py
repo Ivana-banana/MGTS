@@ -22,7 +22,7 @@ def test_reproducible_committed_runtime(tmp_path):
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
         }
         assert all(name.startswith(('mgts_nav/', 'docs/', 'configs/'))
-                   or name in ('README.md', 'requirements.txt') for name in names)
+                   or name in ('README.md', 'requirements.txt', 'tools/plot_quality.py') for name in names)
         assert not any(name.endswith(('.bag', '.mcap', '.db3')) for name in names)
         for name in names:
             if name.startswith('mgts_nav/'):
