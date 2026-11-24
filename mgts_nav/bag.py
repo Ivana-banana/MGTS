@@ -115,9 +115,19 @@ def check_frame(actual, expected):
 
 
 def load_config(path):
-    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    def unique_fields(pairs):
+        fields = {}
+        for key, value in pairs:
+            if key in fields:
+                raise ValueError(f'{path}: duplicate profile field {key!r}')
+            fields[key] = value
+        return fields
+
+    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'), object_pairs_hook=unique_fields)
     if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
         raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
+    if 'gravity_level' in cfg and not isinstance(cfg['gravity_level'], bool):
+        raise ValueError(f'{path}: gravity_level must be JSON true or false')
     names = ['lidar', 'lidar_frame']
     vectors = {'height_band_m': 2, 'base_from_lidar_xyz_m': 3, 'base_from_lidar_xyzw': 4}
     for role in ('imu', 'odom'):

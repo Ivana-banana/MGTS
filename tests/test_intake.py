@@ -11,6 +11,7 @@ from mgts_nav.solve import solve
     ('base_from_lidar_xyzw', [0, 0, 0, 0]), ('base_from_lidar_xyz_m', None),
     ('stationary_s', None), ('max_sync_gap_s', float('nan')), ('height_band_m', [0]),
     ('lidar_frame', ''), ('point_time', []), ('header_offset_s', {'imu': 'unknown'}),
+    ('gravity_level', 'false'), ('gravity_level', 1), ('gravity_level', None),
 ])
 def test_incomplete_or_invalid_profile_names_the_field(tmp_path, field, value):
     profile = json.loads(PROFILE.read_text())
@@ -19,6 +20,18 @@ def test_incomplete_or_invalid_profile_names_the_field(tmp_path, field, value):
     path.write_text(json.dumps(profile))
     with pytest.raises(ValueError, match=field):
         load_config(path)
+
+
+@pytest.mark.parametrize('duplicate', ['"lidar":"/first",', '"header_offset_s":{"imu":0,"imu":30},'])
+def test_duplicate_profile_field_blocks_solve_before_map(tmp_path, monkeypatch, duplicate):
+    data = tmp_path / 'recordings'
+    generate(data)
+    profile = tmp_path / 'ambiguous.json'
+    profile.write_text('{' + duplicate + PROFILE.read_text().lstrip()[1:], encoding='utf-8-sig')
+    monkeypatch.setattr('mgts_nav.solve.subprocess.run', lambda *a, **k: pytest.fail('Unexpected map process'))
+    with pytest.raises(ValueError, match=r'inspection.json: duplicate profile field'):
+        solve(data/'mapping', data/'inspection', PROFILE, tmp_path/'result', inspection_profile=profile)
+    assert not (tmp_path/'result').exists()
 
 
 def test_bad_second_recording_rejected_before_map_and_can_retry(tmp_path, monkeypatch):
