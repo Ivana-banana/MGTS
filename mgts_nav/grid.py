@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 class Grid:
@@ -68,17 +68,86 @@ def read_map(path):
     return pixels, meta, points
 
 
+PREVIEW_MIN_SIDE = 900
+MATCHED, PREDICTED, START, FINISH = '#0074b8', '#dd7800', '#18803a', '#cc263b'
+
+
+def _font(size):
+    try:
+        import matplotlib
+        return ImageFont.truetype(str(Path(matplotlib.get_data_path()) / 'fonts' / 'ttf' / 'DejaVuSans.ttf'), size)
+    except (ImportError, OSError):
+        try:
+            return ImageFont.load_default(size)
+        except TypeError:  # Pillow < 10.1 has only the small bitmap font
+            return ImageFont.load_default()
+
+
 def preview(path, output, trajectory):
+    """Draw the route over the map, magnified with whole pixels, with legend and scale."""
     pixels, meta, _ = read_map(path)
+    h, w = pixels.shape
+    zoom = max(1, -(-PREVIEW_MIN_SIDE // max(h, w)))
+    per_metre = zoom / meta['resolution']
     origin = np.array(meta['origin'][:2])
     coords = (np.array([r.pose[:2] for r in trajectory]) - origin) / meta['resolution']
-    coords[:, 1] = len(pixels) - 1 - coords[:, 1]
-    image = Image.fromarray(pixels).convert('RGB')
+    coords = np.column_stack([coords[:, 0], h - coords[:, 1]]) * zoom
+    route = Image.fromarray(pixels).convert('RGB').resize((w * zoom, h * zoom), Image.NEAREST)
+    draw = ImageDraw.Draw(route)
+    line = max(2, zoom // 2)
+    predicted = False
+    for i in range(1, len(coords)):
+        guess = trajectory[i].status == 'prediction_only'
+        predicted |= guess
+        draw.line([tuple(coords[i-1]), tuple(coords[i])], fill=PREDICTED if guess else MATCHED, width=line)
+    dot = 2 * line + 2
+    # The finish is a ring drawn under the start dot, so both stay visible on a closed loop.
+    x, y = coords[-1]
+    draw.ellipse([x - 2 * dot, y - 2 * dot, x + 2 * dot, y + 2 * dot], outline=FINISH, width=line + 1)
+    x, y = coords[0]
+    draw.ellipse([x - dot, y - dot, x + dot, y + dot], fill=START)
+
+    size = max(16, route.width // 50)
+    font = _font(size)
+    items = [('start', 'старт'), ('finish', 'финиш'), ('line', 'маршрут по карте')]
+    if predicted:
+        items.append(('guess', 'только прогноз'))
+    metres = next(m for m in (1, 2, 5, 10, 20, 50, 100, 200, 500) if m * per_metre >= 4 * size or m == 500)
+    items.append(('scale', f'{metres} м'))
+    measure = ImageDraw.Draw(route)
+    widths = [2 * size + 8 + measure.textlength(text, font=font) + 2 * size if kind != 'scale'
+              else metres * per_metre + 8 + measure.textlength(text, font=font) for kind, text in items]
+    rows, row, used = [], [], 0
+    for item, width in zip(items, widths):
+        if row and used + width > route.width - size:
+            rows.append(row)
+            row, used = [], 0
+        row.append((item, width))
+        used += width
+    rows.append(row)
+    pad = size // 2
+    footer = len(rows) * (size * 2) + pad
+    image = Image.new('RGB', (route.width, route.height + footer), 'white')
+    image.paste(route, (0, 0))
     draw = ImageDraw.Draw(image)
-    for i, p in enumerate(coords[1:], 1):
-        color = '#dd7800' if trajectory[i].status == 'prediction_only' else '#0074b8'
-        draw.line([tuple(coords[i-1]), tuple(p)], fill=color, width=2)
-    for p, color in [(coords[0], '#18803a'), (coords[-1], '#cc263b')]:
-        x, y = p
-        draw.ellipse([x-2, y-2, x+2, y+2], fill=color)
+    for r, row in enumerate(rows):
+        cy = route.height + pad + r * size * 2 + size // 2 + 2
+        x = pad
+        for (kind, text), width in row:
+            mark = size // 2
+            if kind == 'start':
+                draw.ellipse([x + size - mark, cy - mark, x + size + mark, cy + mark], fill=START)
+            elif kind == 'finish':
+                draw.ellipse([x + size - mark, cy - mark, x + size + mark, cy + mark], outline=FINISH, width=3)
+            elif kind in ('line', 'guess'):
+                draw.line([(x, cy), (x + 2 * size, cy)], fill=MATCHED if kind == 'line' else PREDICTED, width=line)
+            if kind == 'scale':
+                bar = metres * per_metre
+                draw.rectangle([x, cy - 3, x + bar, cy + 3], fill='black')
+                draw.line([(x, cy - mark), (x, cy + mark)], fill='black', width=2)
+                draw.line([(x + bar, cy - mark), (x + bar, cy + mark)], fill='black', width=2)
+                draw.text((x + bar + 8, cy), text, fill='black', font=font, anchor='lm')
+            else:
+                draw.text((x + 2 * size + 8, cy), text, fill='black', font=font, anchor='lm')
+            x += width
     image.save(output)
