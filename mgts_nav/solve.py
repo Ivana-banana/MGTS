@@ -11,7 +11,9 @@ from .ros_export import export
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
-          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False):
+          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False):
+    if initial is not None and confirm_start:
+        raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
     output = Path(output)
     if output.exists():
         raise FileExistsError(f'Choose a new output directory: {output}')
@@ -34,6 +36,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         options = ['--initial', *initial] if initial is not None else []
         if inspection_visual_pairs:
             options.extend(['--visual-pairs', inspection_visual_pairs])
+        if confirm_start:
+            options.append('--confirm-start')
         if recover:
             options.append('--recover')
         invoke('localize', inspection, '--config', profiles / 'inspection.json',
@@ -71,7 +75,10 @@ if __name__ == '__main__':
     parser.add_argument('inspection', type=Path)
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--inspection-config', type=Path, help='Override mapping sensor profile')
-    parser.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
+    start = parser.add_mutually_exclusive_group()
+    start.add_argument('--confirm-start', action='store_true',
+                       help='Verify an accepted single-scan start using later scans and odometry')
+    start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
     parser.add_argument('--mapping-visual-pairs', type=Path)
@@ -80,6 +87,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
-              args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs, args.recover)
+              args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
+              args.recover, args.confirm_start)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

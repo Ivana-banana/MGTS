@@ -2,7 +2,7 @@
 import argparse
 from collections import Counter
 import csv
-from itertools import chain, islice
+from itertools import chain, islice, tee
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -53,7 +53,6 @@ def run(args, output):
             prefix = [first]
             try:
                 start = estimate_initial(first.xy, pixels, meta)
-                start_method = 'scan_to_map'
             except ValueError as single_error:
                 from .multiscan import MAX_SCANS, estimate_multiscan
                 prefix.extend(islice(stream, MAX_SCANS - 1))
@@ -63,6 +62,19 @@ def run(args, output):
                     raise ValueError(f'Provide --initial or check calibration. Single scan: {single_error}. '
                                      f'Multiple scans: {multi_error}') from multi_error
                 start_method = 'multiple_scans_to_map'
+            else:
+                start_method = 'scan_to_map'
+                if args.confirm_start:
+                    from .start_confirmation import confirm_start
+                    following, stream = tee(stream)
+                    try:
+                        start = confirm_start(start, first, following, pixels, meta)
+                    except ValueError as error:
+                        raise ValueError(f'Could not confirm automatic start: {error}. '
+                                         'Provide --initial or check calibration.') from error
+                    finally:
+                        del following
+                    start_method = 'confirmed_scan_to_map'
             stream = chain(prefix, stream)
     if start.shape != (3,) or not np.isfinite(start).all():
         raise ValueError('initial pose must contain finite x, y, yaw')
@@ -153,6 +165,8 @@ def main():
             group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
             group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
         if name == 'localize':
+            group.add_argument('--confirm-start', action='store_true',
+                               help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
     args = parser.parse_args()

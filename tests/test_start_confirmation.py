@@ -1,8 +1,10 @@
 from dataclasses import replace
+import sys
 
 import numpy as np
 import pytest
 
+from mgts_nav import __main__ as cli
 from mgts_nav.bag import Scan, load_config, scans
 from mgts_nav.demo import PROFILE, generate
 from mgts_nav.grid import Grid, read_map
@@ -13,7 +15,7 @@ from mgts_nav.start_confirmation import confirm_start
 
 
 @pytest.mark.parametrize("seed", [41, 73])
-def test_full_views_and_reproduced_false_accept(tmp_path, seed):
+def test_full_views_and_reproduced_false_accept(tmp_path, seed, monkeypatch, capsys):
     root = tmp_path / "demo"
     generate(root, layout="corridor", seed=seed)
     cfg = load_config(PROFILE)
@@ -41,7 +43,17 @@ def test_full_views_and_reproduced_false_accept(tmp_path, seed):
         assert abs(wrap(candidate[2] - ref.yaw)) > np.deg2rad(170)
         with pytest.raises(ValueError, match="Ambiguous|disagree") as reason:
             confirm_start(candidate, first, limited[1:], pixels, meta)
-        print(f"seed=73 index=30 rejected: {reason.value}")
+        # Exercise the same limited observations through the localization entry point.
+        output = tmp_path / "limited-result"
+        monkeypatch.setattr(cli, "scans", lambda bag, config: iter(limited))
+        monkeypatch.setattr(sys, "argv", ["mgts_nav", "localize", str(root / "inspection"),
+                            "--map", str(tmp_path / "map.yaml"), "--config", str(PROFILE),
+                            "--out", str(output), "--confirm-start"])
+        with pytest.raises(SystemExit) as failure:
+            cli.main()
+        assert failure.value.code == 2
+        assert f"Could not confirm automatic start: {reason.value}" in capsys.readouterr().err
+        assert not output.exists()
 
 
 def test_rejects_reuse_of_first_scan_or_missing_window():
