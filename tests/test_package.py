@@ -95,3 +95,19 @@ def test_cli_preserves_existing_destination(tmp_path):
                             capture_output=True)
     assert result.returncode == 2
     assert archive.read_bytes() == b'keep'
+
+
+@pytest.mark.parametrize('revision,digest', [
+    ('3aef5eaf1f4a01ff87ffd0393eaac1fb4edfa986', '372759b04cc3b8a0ba30cd5a2d381dc8c5799c2486980d6effcc0a8fd023d941'),
+    ('9bab80b7b989289081e46c72066a9d08dd4d8efa', 'c967de77b0b6cf2a2060334b843e035a610e022c5f7c07f45365804c361dec82'),
+])
+def test_historical_package(tmp_path, revision, digest):
+    archive = tmp_path / 'historical.zip'
+    cmd = [sys.executable, 'tools/package_solution.py', str(archive), '--revision', revision]
+    subprocess.run(cmd, check=True)
+    original = archive.read_bytes()
+    assert hashlib.sha256(original).hexdigest() == digest
+    subprocess.run([*cmd, '--verify'], check=True)
+    archive.write_bytes(original[:100] + bytes([original[100] ^ 1]) + original[101:])
+    failed = subprocess.run([*cmd, '--verify'], capture_output=True)
+    assert failed.returncode == 2 and b'SHA-256' in failed.stderr
