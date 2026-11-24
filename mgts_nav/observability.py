@@ -65,7 +65,10 @@ def main():
         if args.config is None:
             parser.error('--bag requires --config')
         from .bag import load_config, scans
-        first = next(iter(scans(args.bag, load_config(args.config))), None)
+        try:
+            first = next(iter(scans(args.bag, load_config(args.config))), None)
+        except (OSError, KeyError, ValueError) as exc:
+            parser.exit(2, f'{exc}\n')
         if first is None:
             parser.error('Recording contains no lidar scans')
         report = dict(t=first.t, geometry=diagnose(first.xy))

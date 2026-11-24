@@ -41,7 +41,10 @@ def read_anchors(path):
         if not {'t', 'x', 'y', 'yaw', 'status'}.issubset(rows.fieldnames or []):
             raise ValueError('Scan trajectory needs t,x,y,yaw,status')
         for line, row in enumerate(rows, 2):
-            values = [float(row[k]) for k in ('t', 'x', 'y', 'yaw')]
+            try:
+                values = [float(row[k]) for k in ('t', 'x', 'y', 'yaw')]
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f'{path}:{line}: invalid number or missing field in t,x,y,yaw') from exc
             if not np.isfinite(values).all() or values[0] <= previous:
                 raise ValueError(f'{path}:{line}: invalid scan pose or non-increasing time')
             previous = values[0]

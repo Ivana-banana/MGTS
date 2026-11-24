@@ -53,5 +53,8 @@ if __name__ == "__main__":
     parser.add_argument("map", help="map.yaml from synthetic mapping, anchored at [0,0,0]")
     parser.add_argument("--tolerance", type=float, default=0.12, help="Distance in metres")
     args = parser.parse_args()
-    _, meta, points = read_map(args.map)
+    try:
+        _, meta, points = read_map(args.map)
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        parser.exit(2, f"{args.map}: cannot read map.yaml: {exc}\n")
     print(json.dumps(evaluate_map(points, WALLS, meta["resolution"], args.tolerance), indent=2))

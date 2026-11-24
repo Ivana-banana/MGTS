@@ -35,6 +35,7 @@ def demo(tmp_path_factory):
     ['mgts_nav', 'baseline', '{bag}', '--config', PROFILE, '--initial', 0, 0, 0, '--out', '{out}'],
     ['mgts_nav.calibration', '{bag}', '--base', 'a', '--lidar', 'b', '--imu', 'c'],
     ['mgts_nav.profile', '{bag}'],
+    ['mgts_nav.observability', '--bag', '{bag}', '--config', PROFILE],
 ])
 def test_unreadable_recording_is_reported(demo, tmp_path, command):
     bag = tmp_path / 'notabag.txt'
@@ -99,3 +100,22 @@ def test_initial_help_names_units():
     for module in (['mgts_nav', 'localize'], ['mgts_nav.solve']):
         run = cli(*module, '--help')
         assert 'YAW in' in run.stdout and 'radians' in run.stdout
+
+
+def test_continuous_short_row_names_the_line(demo, tmp_path):
+    scans = tmp_path / 'scans.csv'
+    scans.write_text('t,x,y,yaw,status\n1.0,0,0,0,matched\n2.0,0,0\n')
+    run = cli('mgts_nav.continuous', demo / 'inspection', scans, tmp_path / 'dense.csv', '--config', PROFILE)
+    refused(run, f'{scans}:3: invalid number')
+
+
+@pytest.mark.parametrize('command', [
+    ['mgts_nav.loop', '{mapping}', '{missing}', '--config', PROFILE],
+    ['mgts_nav.loop', '{mapping}', '{text}', '--config', PROFILE],
+    ['mgts_nav.map_eval', '{missing}'],
+])
+def test_auxiliary_clis_report_input_errors(demo, tmp_path, command):
+    text = tmp_path / 'words.csv'
+    text.write_text('t,x,y,yaw\na,b,c,d\n')
+    names = dict(mapping=demo / 'mapping', missing=tmp_path / 'missing.csv', text=text)
+    refused(cli(*[str(a).format(**names) for a in command]))
