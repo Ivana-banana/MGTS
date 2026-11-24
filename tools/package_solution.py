@@ -21,6 +21,7 @@ FILES = tuple(sorted((
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
     'tools/evaluate_camera.py', 'docs/camera-experiment.md',
+    'tools/evaluate_deskew.py', 'docs/deskew-experiment.md',
     'docs/plan-alignment.md', 'docs/plan-landmarks.json', 'docs/office-plan.png', 'docs/plan-route.png',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
     'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
