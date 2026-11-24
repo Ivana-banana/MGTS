@@ -13,11 +13,11 @@
 ## Запуск из корня MGTS в Windows PowerShell
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
-& $python -m mgts_nav.plan_alignment docs/office-plan.png docs/plan-landmarks.json out/inspection-result/trajectory.csv --fit-scale --out out/plan-registration
+$python = '.\.venv-mgts\Scripts\python.exe'
+& $python -m mgts_nav.plan_alignment docs/office-plan.png docs/plan-landmarks.json out/my-first-demo/inspection/trajectory.csv --fit-scale --out out/plan-registration
 ```
 
-Укажите новый выходной каталог. В `route.png` записывается линия по точкам входного CSV в порядке времени. Линия между отсчётами служит для наглядности и может пересекать интервалы потери локализации. В `alignment.json` сохраняются угол, перенос, масштаб, невязка каждого ориентира в метрах плана и отдельные RMSE по обучающим и контрольным точкам.
+Пример берёт инспекцию репетиции из README (`python -m mgts_nav.rehearse out/my-first-demo`). Укажите новый выходной каталог. В `route.png` записывается линия по точкам входного CSV в порядке времени. Линия между отсчётами служит для наглядности и может пересекать интервалы потери локализации. В `alignment.json` сохраняются угол, перенос, масштаб, невязка каждого ориентира в метрах плана и отдельные RMSE по обучающим и контрольным точкам.
 
 ## Проверка на синтетическом плане
 
