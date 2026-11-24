@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!requirements.txt
+!mgts_nav/
+!mgts_nav/*.py
+!configs/
+!configs/*.json
+!configs/*.rviz

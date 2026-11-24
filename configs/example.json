@@ -1,0 +1,15 @@
+{
+  "lidar": "/demo/cloud",
+  "imu": "/demo/imu",
+  "odom": "/demo/odom",
+  "lidar_frame": "lidar",
+  "imu_frame": "imu",
+  "base_frame": "base_link",
+  "odom_frame": "odom",
+  "base_from_lidar_xyz_m": [0.2, 0, 0.3],
+  "base_from_lidar_xyzw": [0, 0, 0, 1],
+  "base_from_imu_xyzw": [0, 0, 0, 1],
+  "height_band_m": [0.15, 1.5],
+  "max_sync_gap_s": 0.35,
+  "stationary_s": 0.5
+}

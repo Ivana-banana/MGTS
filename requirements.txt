@@ -1,0 +1,5 @@
+numpy==2.2.6
+scipy==1.15.3
+rosbags==0.11.5
+PyYAML>=6,<7
+Pillow>=10,<13

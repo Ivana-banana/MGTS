@@ -1,2 +1,8 @@
 /.venv
+/out/
+/data/
+*.db3
+*.mcap
+__pycache__/
+.pytest_cache/
 Сервисная робототехника — Код города — 13.11.2026.mp4
