@@ -38,4 +38,14 @@ if ($LASTEXITCODE -ne 0) { throw 'Рабочие исходники отлича
 & $python -m pytest -q -s tests/test_package.py
 ```
 
-Тест собирает архив из HEAD и в изолированных процессах Python загружает из него `delayed_start` (включая режим ключевых сканов), `obstacles`, `solve_manifest` и `interior_loop`. Проверяются путь пакета, загрузчик каждого модуля и вывод `--help`. Затем тест выполняет обычный `solve` на синтетической паре и сравнивает байты отчёта `interior_loop` при запуске из архива и рабочего дерева. Интерпретатор и внешние зависимости должны быть установлены в окружении.
+Тест собирает архив из HEAD, проверяет загрузку диагностических команд из ZIP и запускает полный `solve` на синтетической паре из рабочего дерева и из архива. Сравниваются байты карты, траекторий обхода и инспекции, плотной траектории и кинематической одометрии. При запуске из ZIP все дочерние этапы используют тот же архив. Интерпретатор и внешние зависимости должны быть установлены в окружении.
+
+Для полевого повтора подготовьте запись согласно [руководству HEAP-1](public-data.md). Переменные `$python` и `$archive` задаются при сборке выше. Обработка и проверка могут выполняться непосредственно из ZIP.
+
+```powershell
+$launch = "import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module(sys.argv.pop(1),run_name='__main__',alter_sys=True)"
+$d = 'out/heap1-revisit-v2'
+$o = 'out/packed-heap1-solve'
+& $python -I -c $launch $archive mgts_nav.solve "$d/mapping" "$d/inspection" --config "$d/profile.json" --start-search delayed --out $o
+if ($LASTEXITCODE -eq 0) { & $python -I -c $launch $archive mgts_nav.solve_audit "$d/mapping" "$d/inspection" $o }
+```
