@@ -11,7 +11,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
-    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'continuous', 'demo',
+    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'continuous', 'demo',
     'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
     'multiscan', 'observability', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
     'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',

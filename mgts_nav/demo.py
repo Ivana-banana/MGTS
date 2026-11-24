@@ -101,7 +101,8 @@ def lidar_points(pose, elapsed, profile, rng, walls=WALLS, dropout=0.10):
     return sensor.apply(base_relative).astype("<f4")
 
 
-def record(directory, run, profile, store, seed, layout="office", storage="sqlite3", *, duration=None):
+def record(directory, run, profile, store, seed, layout="office", storage="sqlite3", *, duration=None,
+           camera_stress=False):
     duration = DURATION[run] if duration is None else duration
     rng = np.random.default_rng(seed)
     types = store.types
@@ -141,6 +142,8 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
             pose = pose_at(run, elapsed, layout, duration)
             if key == "lidar":
                 xyz = lidar_points(pose, elapsed, profile, rng, walls, 0.35 if layout == "corridor" else 0.10)
+                if camera_stress and 4 <= elapsed < 6:
+                    xyz = xyz[:8]
                 message = types[TOPIC_TYPES[key]](
                     header, 1, len(xyz), fields, False, 12, 12 * len(xyz),
                     xyz.view(np.uint8).ravel(), True)
@@ -150,6 +153,8 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
                         - pose_at(run, elapsed - 0.001, layout, duration)[2]) / 0.002
                 gyro = inverse_imu.apply([0.0, 0.0, rate + 0.015])
                 gyro += rng.normal(0.0, 0.002, 3)
+                if camera_stress and 4.8 <= elapsed < 6:
+                    continue
                 gravity = inverse_imu.apply([0.0, 0.0, 9.81])
                 message = types[TOPIC_TYPES[key]](
                     header, quaternion(0, 0, 0, 1), np.r_[-1.0, np.zeros(8)],
@@ -173,22 +178,29 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
                       store.serialize_cdr(message, TOPIC_TYPES[key]))
 
 
-def generate(output, layout="office", seed=17, storage="sqlite3"):
+def generate(output, layout="office", seed=17, storage="sqlite3", camera_experiment=False):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         raise FileExistsError(f"Choose a fresh demo directory: {output}")
+    if camera_experiment and layout != "office":
+        raise ValueError("Camera landmarks and bounds are defined for the office layout")
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
     store = get_typestore(Stores.ROS2_HUMBLE)
     with TemporaryDirectory(dir=output.parent) as temp:
         staging = Path(temp) / "dataset"
         staging.mkdir()
         for i, run in enumerate(DURATION):
-            record(staging, run, profile, store, seed+i, layout, storage)
+            record(staging, run, profile, store, seed+i, layout, storage,
+                   camera_stress=camera_experiment and run == "inspection")
+        scenario = dict(layout=layout, seed=seed, storage=storage)
+        if camera_experiment:
+            from .camera_demo import write_camera_pairs
+            write_camera_pairs(staging / 'inspection-pairs.jsonl', seed + 2, pose_at, WALLS, START_NS['inspection'])
+            scenario['camera_experiment'] = True
         (staging / "initial_pose.json").write_text(
             json.dumps(pose_at("inspection", 0, layout).tolist()) + "\n", encoding="utf-8")
-        (staging / "scenario.json").write_text(json.dumps(dict(layout=layout, seed=seed, storage=storage)),
-                                               encoding="utf-8")
+        (staging / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
         staging.rename(output)
 
 
@@ -198,5 +210,7 @@ if __name__ == "__main__":
     parser.add_argument("--layout", choices=["office", "corridor"], default="office")
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--storage", choices=STORAGE, default="sqlite3", help="ROS 2 storage format")
+    parser.add_argument("--camera-experiment", action="store_true",
+                        help="Generate camera feature pairs and a weak-lidar inspection in the office")
     args = parser.parse_args()
-    generate(args.out, args.layout, args.seed, args.storage)
+    generate(args.out, args.layout, args.seed, args.storage, args.camera_experiment)

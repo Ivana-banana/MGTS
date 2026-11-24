@@ -51,6 +51,8 @@ def test_long_and_geometry_rejections_do_not_supply_yaw(tmp_path):
     unsupported.update(tracks=[], accepted=True, yaw_rad=.75)
     output, stats, _ = run(tmp_path, [too_long, unsupported], [0, .35, .45], [None]*3)
     assert stats['long_pairs'] == stats['geometry_rejected_pairs'] == 1
+    assert stats['accepted_pairs'] == 0
+    assert stats['geometry_rejection_reasons'] == {'too_few_tracks': 1}
     assert stats['rejected'] == 2 and all(scan.gyro_delta is None for scan in output)
 
 

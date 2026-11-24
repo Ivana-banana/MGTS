@@ -50,8 +50,12 @@ def _read_pairs(path, stats):
                     result = estimate(row)
                     if result['accepted']:
                         yaw = result['yaw_rad']
+                        stats['accepted_pairs'] += 1
                     else:
                         stats['geometry_rejected_pairs'] += 1
+                        reasons = stats['geometry_rejection_reasons']
+                        reason = result['reason']
+                        reasons[reason] = reasons.get(reason, 0) + 1
                 pairs.append(Interval(start, end, yaw))
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(f'{path}:{line_num}: {exc}') from exc
@@ -81,8 +85,9 @@ def apply_visual(scans, path, stats):
     An overlap or reversed clock is a malformed file and raises ValueError.
     """
     for key in ('fallback', 'blend', 'rejected', 'uncovered', 'conflict', 'long_pairs',
-                'geometry_rejected_pairs'):
+                'geometry_rejected_pairs', 'accepted_pairs'):
         stats.setdefault(key, 0)
+    stats.setdefault('geometry_rejection_reasons', {})
     pairs = _read_pairs(path, stats)
     ends = [pair.end for pair in pairs]
     previous = None
