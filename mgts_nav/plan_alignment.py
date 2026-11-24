@@ -50,23 +50,36 @@ def similarity(src, dst, fit_scale):
     return angle, scale, linear, bc - linear @ ac
 
 
-def consensus(src, dst, fit_scale, limit):
-    """Largest set of fit landmarks that a transform from one pair of them explains within limit.
+def consensus(src, dst, fit_scale, limit, rounds=3):
+    """Largest set of fit landmarks that agree within limit on one least squares transform.
 
-    A swapped or mistyped landmark spoils the least squares fit of all points, but stays
-    outside the set that the correct landmarks agree on.
+    Every pair of landmarks, and all of them together, propose a transform. Each proposal is
+    refit by least squares to the landmarks it explains and the set is recounted against the
+    refit, a few times (LO-RANSAC). A landmark is left out only if the fit through the agreeing
+    ones misses it, not just the transform through one pair.
+    A swapped or mistyped landmark spoils the least squares fit of all points, but stays outside
+    the set that the correct landmarks agree on.
     """
+    n = len(src)
+    seeds = [tuple(range(n))] + [(i, j) for i in range(n) for j in range(i + 1, n)]
     best, best_cost = (), np.inf
-    for i in range(len(src)):
-        for j in range(i + 1, len(src)):
-            fitted = similarity(src[[i, j]], dst[[i, j]], fit_scale)
+    for seed in seeds:
+        members, err = seed, None
+        for _ in range(rounds):
+            fitted = similarity(src[list(members)], dst[list(members)], fit_scale)
             if fitted is None:
-                continue
+                break
             err = np.linalg.norm(src @ fitted[2].T + fitted[3] - dst, axis=1)
-            inliers = tuple(np.flatnonzero(err < limit))
-            cost = float(np.sum(err[list(inliers)]))
-            if (len(inliers), -cost) > (len(best), -best_cost):
-                best, best_cost = inliers, cost
+            agreed = tuple(np.flatnonzero(err < limit))
+            if agreed == members or len(agreed) < 2:
+                break
+            members = agreed
+        if err is None:
+            continue
+        inliers = tuple(np.flatnonzero(err < limit))
+        cost = float(np.sum(err[list(inliers)]))
+        if (len(inliers), -cost) > (len(best), -best_cost):
+            best, best_cost = inliers, cost
     return best
 
 
@@ -103,15 +116,20 @@ def register(model, width, height, fit_scale=False, outlier_m=0.25):
     warnings, suspects = [], []
     if len(fit_names) >= 3:
         agree = consensus(xy[fit], plan[fit], fit_scale, outlier_m)
+        agreeing = [fit_names[k] for k in agree]
         if len(agree) > len(fit_names) / 2 and len(agree) >= 3:
             suspects = [name for k, name in enumerate(fit_names) if k not in agree]
             if suspects:
-                warnings.append(f'Fit landmarks {suspects} disagree by more than {outlier_m:g} m with the '
-                                f'transform shared by the other {len(agree)}; check their names and '
-                                'coordinates. They are still used in the fit.')
+                warnings.append(f'Fit landmarks {suspects} miss by more than {outlier_m:g} m the least squares '
+                                f'fit through the other {len(agree)} fit landmarks, which agree with each other; '
+                                'check their names and coordinates. They are still used in the fit.')
+        elif len(agree) > len(fit_names) / 2:
+            warnings.append(f'Only {agreeing} of {len(fit_names)} fit landmarks agree within {outlier_m:g} m; '
+                            'too few to name the wrong one (at least 3 agreeing are needed). '
+                            'Add landmarks or check them all.')
         else:
             warnings.append(f'No majority of fit landmarks agrees within {outlier_m:g} m (largest consistent '
-                            f'set {[fit_names[k] for k in agree]}); check for swapped landmarks.')
+                            f'set {agreeing}); check for swapped landmarks.')
     check_outliers = [name for name, used, r in zip(names, fit, residuals) if not used and r > outlier_m]
     if check_outliers:
         warnings.append(f'Check landmarks {check_outliers} miss the fit by more than {outlier_m:g} m.')

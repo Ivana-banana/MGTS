@@ -7,6 +7,7 @@ from PIL import Image
 import pytest
 
 from mgts_nav.plan_alignment import register
+from mgts_nav.slam import rotation
 
 
 def example():
@@ -76,3 +77,37 @@ def test_repeated_landmark_name_is_rejected(tmp_path):
         load_model(path)
     path.write_bytes('{"metres_per_pixel": 0.02}'.encode('utf-8-sig'))
     assert load_model(path)['metres_per_pixel'] == 0.02
+
+
+def noisy_clean_model(rng, count, noise_m, meter=0.02):
+    xy = rng.uniform(-4, 4, (count, 2))
+    plan = (xy @ rotation(np.deg2rad(18)).T) * 1.15 + [12, 10]
+    uv = plan / meter
+    uv[:, 1] = 999 - uv[:, 1]
+    uv += rng.normal(0, noise_m / meter, uv.shape)
+    names = [f'l{k}' for k in range(count)]
+    return dict(metres_per_pixel=meter, map_m=dict(zip(names, xy.tolist())),
+                plan_px=dict(zip(names, uv.tolist())), check=[])
+
+
+@pytest.mark.parametrize('count', [3, 4, 5, 6, 8])
+def test_clean_landmarks_with_marking_noise_are_not_suspects(count):
+    # 0.07 m per axis, 0.1 m RMS off on the plan. The transform through one pair of landmarks
+    # used to throw a correct third one past 0.25 m; the refit through the agreeing set does not.
+    rng = np.random.default_rng(count)
+    for _ in range(100):
+        report = register(noisy_clean_model(rng, count, 0.07), 1200, 1000, True)[2]
+        assert report['suspects'] == [] and report['warnings'] == []
+
+
+def test_two_of_three_agreeing_is_too_few_to_name_the_wrong_one():
+    model = example()
+    model['check'] = []
+    names = sorted(model['map_m'])[:3]
+    model['map_m'] = {name: model['map_m'][name] for name in names}
+    model['plan_px'] = {name: model['plan_px'][name] for name in names}
+    model['plan_px'][names[0]][0] += 60
+    report = register(model, 900, 680, True)[2]
+    assert report['suspects'] == []
+    assert any('too few to name' in w for w in report['warnings'])
+    assert not any('No majority' in w for w in report['warnings'])
