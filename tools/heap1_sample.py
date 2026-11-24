@@ -18,6 +18,7 @@ ROOT = ("https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset/resol
 # TAR payload offsets, lengths and SHA-256 at this immutable revision.
 CHUNKS = {
     "points": (75065344, 88887497, "dac6e722351bfbb6f12937d3d8c9a637015755b7b579add742b9e49dee6e89ff"),
+    "points5": (482874880, 84348182, "0a476f74b1ffd0e3813ee0fa151473a82991f368e1786efed5874d114230effb"),
     "timestamp": (682354688, 1089489, "6f83143bfc293cb947e9337e2144a07820dae8481102b22bb8279a2b84950e57"),
     "valid": (683449344, 1088907, "43aadcdac0d215a9f5f719d90b99a3afa2c9f987d906e05cca7a0fe5b1af9306"),
 }
@@ -25,7 +26,7 @@ WINDOW = slice(300, 360)
 SPLIT = 40
 
 
-def read_window(name, dtype, row_shape=()):
+def read_window(name, dtype, row_shape=(), window=WINDOW):
     offset, size, digest = CHUNKS[name]
     end = offset + size - 1
     request = Request(f"{ROOT}/data/velodyne_points.tar?chunk={name}",
@@ -37,15 +38,27 @@ def read_window(name, dtype, row_shape=()):
     if len(payload) != size or hashlib.sha256(payload).hexdigest() != digest:
         raise ValueError(f"Unexpected {name} chunk at pinned dataset revision")
     array = np.frombuffer(blosc.decompress(payload), dtype).reshape((-1, *row_shape))
-    return array[WINDOW].copy()
+    return array[window].copy()
 
 
-def write_bag(path, store, topic, frame, timestamps, points, valid):
+def write_bag(path, store, topic, frame, timestamps, points, valid, imu=None):
     types = store.types
     field = types["sensor_msgs/msg/PointField"]
     fields = [field(name, 4 * idx, 7, 1) for idx, name in enumerate("xyz")]
     with Writer(path, version=8) as bag:
         conn = bag.add_connection(topic, "sensor_msgs/msg/PointCloud2", typestore=store)
+        if imu is not None:
+            imu_frame, samples = imu
+            imu_conn = bag.add_connection("/anymal_imu", "sensor_msgs/msg/Imu", typestore=store)
+            for t, rate, acc in samples:
+                ns = round(float(t) * 1e9)
+                stamp = types["builtin_interfaces/msg/Time"](*divmod(ns, 1_000_000_000))
+                header = types["std_msgs/msg/Header"](stamp, imu_frame)
+                vector = types["geometry_msgs/msg/Vector3"]
+                msg = types[imu_conn.msgtype](header, types["geometry_msgs/msg/Quaternion"](0, 0, 0, 1),
+                                             np.r_[-1., np.zeros(8)], vector(*rate), np.zeros(9),
+                                             vector(*acc), np.zeros(9))
+                bag.write(imu_conn, ns, store.serialize_cdr(msg, imu_conn.msgtype))
         for t, xyz, count in zip(timestamps, points, valid, strict=True):
             if not 0 < count <= len(xyz):
                 raise ValueError(f"Invalid point count at {t}")
