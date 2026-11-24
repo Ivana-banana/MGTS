@@ -1,4 +1,6 @@
 /.venv
+/.venv-mgts/
+CLAUDE.local.md
 /out/
 /data/
 *.db3
