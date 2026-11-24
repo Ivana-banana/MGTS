@@ -14,7 +14,7 @@ MODULES = (
     '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'continuous', 'demo',
     'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
     'multiscan', 'observability', 'plan_alignment', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
-    'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',
+    'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'sync', 'vision', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
     'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
