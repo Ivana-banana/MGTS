@@ -7,8 +7,41 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
+import numpy as np
+from scipy.spatial import ConvexHull, QhullError
+
 from .bag import check_recording
+from .metrics import read_csv
 from .ros_export import export
+
+# Both route measures must exceed the mapping route by this factor to call the order suspicious.
+SWAP_RATIO = 1.25
+
+
+def route_extent(path):
+    """Duration, path length and convex-hull area of a trajectory CSV, all in the map frame."""
+    rows = read_csv(path)
+    xy = np.array([[r.x, r.y] for r in rows])
+    try:
+        area = float(ConvexHull(xy).volume) if len(xy) >= 3 else 0.0
+    except QhullError:
+        area = 0.0
+    return dict(duration_s=rows[-1].t - rows[0].t,
+                path_m=float(np.linalg.norm(np.diff(xy, axis=0), axis=1).sum()), hull_area_m2=area)
+
+
+def recording_order(mapping_route, inspection_route):
+    """Flag a likely swap of the two recordings. Heuristic only: it never stops the run."""
+    mapping, inspection = route_extent(mapping_route), route_extent(inspection_route)
+    suspected = all(inspection[key] > SWAP_RATIO * mapping[key] for key in ('path_m', 'hull_area_m2'))
+    report = dict(mapping=mapping, inspection=inspection, ratio=SWAP_RATIO, suspected_swap=suspected)
+    if suspected:
+        report['warning'] = (
+            f'The inspection route is longer ({inspection["path_m"]:.1f} m vs {mapping["path_m"]:.1f} m) '
+            f'and covers more area ({inspection["hull_area_m2"]:.1f} m2 vs {mapping["hull_area_m2"]:.1f} m2) '
+            'than the mapping route. Check that the recordings are not swapped: '
+            'the first positional argument is the mapping recording, the second is the inspection.')
+    return report
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
@@ -46,6 +79,11 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         invoke('localize', inspection, '--config', profiles / 'inspection.json',
                '--map', map_dir / 'map.yaml', '--out', result, *options)
         summary = json.loads((result / 'summary.json').read_text(encoding='utf-8'))
+        order = recording_order(map_dir / 'trajectory.csv', result / 'trajectory.csv')
+        summary['recording_order'] = order
+        (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
+        if order['suspected_swap']:
+            print(f'WARNING: {order["warning"]}', file=sys.stderr)
         # Both methods get the same start, including when it was estimated by scan matching.
         route = result / 'trajectory.csv'
         if cfg['odom'] is not None:
