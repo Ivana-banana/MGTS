@@ -136,6 +136,9 @@ def run(args, output):
     summary = dict(scans=len(estimates), status=counts, final_pose=estimates[-1].pose.tolist(),
                    final_status=estimates[-1].status, initial_pose=start.tolist(),
                    initialization=start_method)
+    if args.command == 'localize':
+        from .quality import inspection_quality
+        summary['quality'] = inspection_quality(estimates)
     if visual_stats:
         summary['visual_yaw'] = visual_stats
     if recovery is not None:
