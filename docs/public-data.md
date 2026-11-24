@@ -16,6 +16,16 @@
 python -m tools.plot_heap1_revisit out/heap1-blind-solve out/heap1-revisit-v2/inspection-reference.csv out/heap1-field.png
 ```
 
+Для проверки артефактов этого прогона эталон CPT7 не требуется. На исходных bag семантический аудит сверил 40 сканов обхода, 60 сканов инспекции, карту и все 60 опубликованных поз RViz. Первая метка экспорта — 1731588668081259000 нс, последняя — 1731588673981606000 нс. SHA-манифест подтвердил 16 файлов. При перестановке записей аудит вернул код 2 и указал на первую несовпадающую метку в `map/trajectory.csv`.
+
+```powershell
+$data = 'out/heap1-revisit-v2'
+$result = 'out/heap1-blind-solve'
+python -m mgts_nav.solve_audit "$data/mapping" "$data/inspection" $result
+python -m mgts_nav.solve_manifest create "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+```
+
 ## Подключение
 
 1. В каталоге GrandTour выбрать HEAP-1. ROS 1 bags выдаются через Kleinkram после регистрации. Открытая копия Zarr доступна через Hugging Face и требует отдельного преобразования в сообщения ROS. [Форматы и порядок доступа](https://grand-tour.leggedrobotics.com/dataset)
