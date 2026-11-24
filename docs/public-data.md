@@ -103,3 +103,9 @@ $p = Import-Csv "$data/inspection-reference.csv" | Select-Object -First 1
 & $python -m mgts_nav localize "$data/inspection" --map out/heap1-revisit-map/map.yaml --config "$data/profile.json" --initial $p.x $p.y $p.yaw --out out/heap1-revisit-seeded-v2
 & $python -m mgts_nav.metrics out/heap1-revisit-seeded-v2/trajectory.csv "$data/inspection-reference.csv"
 ```
+
+Для сохранённой траектории слепого старта из №48 команда ниже сопоставила все 60 меток с CPT7. Среднеквадратичная ошибка положения составила 4,82 см, абсолютная ошибка курса (`absolute_yaw_rmse_rad`) — 0,00725 рад, или 0,416°. Метрика курса использует кратчайшую угловую разницу в системе карты на каждой сопоставленной метке.
+
+```powershell
+& $python -m mgts_nav.metrics out/heap1-full-blind-48/inspection/trajectory.csv "$data/inspection-reference.csv"
+```

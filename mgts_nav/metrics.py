@@ -74,7 +74,7 @@ def evaluate(estimate, truth, max_gap_s=None):
     truth_limit = cadence_limit(truth) if max_gap_s is None else max_gap_s
     times = [p.t for p in estimate]
     matched = pairs = 0
-    position_sq = translation_sq = rotation_sq = 0.0
+    position_sq = yaw_sq = translation_sq = rotation_sq = 0.0
     previous = None
     for ref in truth:
         est = interpolate(estimate, times, ref.t, estimate_limit)
@@ -83,6 +83,7 @@ def evaluate(estimate, truth, max_gap_s=None):
             continue
         matched += 1
         position_sq += (est.x - ref.x) ** 2 + (est.y - ref.y) ** 2
+        yaw_sq += wrap(est.yaw - ref.yaw) ** 2
         if previous is not None:
             last_est, last_ref = previous
             # A pair requires a continuous estimator interval even when the
@@ -104,6 +105,7 @@ def evaluate(estimate, truth, max_gap_s=None):
         "truth_samples": len(truth), "matched_samples": matched,
         "coverage": matched / len(truth), "relative_pairs": pairs,
         "ate_xy_rmse_m": math.sqrt(position_sq / matched) if matched else None,
+        "absolute_yaw_rmse_rad": math.sqrt(yaw_sq / matched) if matched else None,
         "rpe_translation_rmse_m": math.sqrt(translation_sq / pairs) if pairs else None,
         "rpe_rotation_rmse_rad": math.sqrt(rotation_sq / pairs) if pairs else None,
     }
