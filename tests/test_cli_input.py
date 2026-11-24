@@ -88,3 +88,14 @@ def test_solve_names_the_broken_inspection_profile(demo, tmp_path):
     run = cli('mgts_nav.solve', demo / 'mapping', demo / 'inspection', '--config', PROFILE,
               '--inspection-config', profile, '--out', tmp_path / 'out')
     refused(run, f'{profile}: invalid JSON in sensor profile')
+
+
+@pytest.mark.parametrize('values, phrase', [(['-1', '0.55'], "got '--out'"), (['1,5', '0', '0'], 'decimal separator')])
+def test_initial_explains_three_values_in_radians(demo, tmp_path, values, phrase):
+    refused(localize(demo, tmp_path, '--initial', *values), phrase, 'X Y YAW (metres, metres, radians)')
+
+
+def test_initial_help_names_units():
+    for module in (['mgts_nav', 'localize'], ['mgts_nav.solve']):
+        run = cli(*module, '--help')
+        assert 'YAW in' in run.stdout and 'radians' in run.stdout

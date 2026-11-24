@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
+from .__main__ import INITIAL_HELP, pose_number
 from .bag import check_recording, load_config
 from .metrics import read_csv
 from .ros_export import export
@@ -122,7 +123,7 @@ if __name__ == '__main__':
     start = parser.add_mutually_exclusive_group()
     start.add_argument('--confirm-start', action='store_true',
                        help='Verify an accepted single-scan start using later scans and odometry')
-    start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
+    start.add_argument('--initial', type=pose_number, nargs=3, metavar=('X', 'Y', 'YAW'), help=INITIAL_HELP)
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
     parser.add_argument('--mapping-visual-pairs', type=Path)

@@ -19,6 +19,20 @@ class MissingBaselineAnchor(ValueError):
     """The first scan has no synchronized kinematic position."""
 
 
+INITIAL_HELP = 'Start pose in the map frame: X and Y in metres, YAW in radians (not degrees)'
+
+
+def pose_number(text):
+    """argparse type for --initial: explain the three values instead of 'invalid float value'."""
+    try:
+        return float(text)
+    except ValueError:
+        hint = 'use a dot as the decimal separator. ' if ',' in text else ''
+        raise argparse.ArgumentTypeError(
+            f'got {text!r}; {hint}--initial needs three numbers X Y YAW '
+            '(metres, metres, radians)') from None
+
+
 def load_map(path):
     """Read the map.yaml written by `map`, naming the expected file on typical mistakes."""
     if path.is_dir():
@@ -82,8 +96,8 @@ def run(args, output):
                 try:
                     start = estimate_multiscan(prefix, pixels, meta)
                 except ValueError as multi_error:
-                    raise ValueError(f'Provide --initial or check calibration. Single scan: {single_error}. '
-                                     f'Multiple scans: {multi_error}') from multi_error
+                    raise ValueError('Provide --initial X Y YAW (metres, radians) or check calibration. '
+                                     f'Single scan: {single_error}. Multiple scans: {multi_error}') from multi_error
                 start_method = 'multiple_scans_to_map'
             else:
                 start_method = 'scan_to_map'
@@ -93,8 +107,8 @@ def run(args, output):
                     try:
                         start = confirm_start(start, first, following, pixels, meta)
                     except ValueError as error:
-                        raise ValueError(f'Could not confirm automatic start: {error}. '
-                                         'Provide --initial or check calibration.') from error
+                        raise ValueError(f'Could not confirm automatic start: {error}. Provide --initial '
+                                         'X Y YAW (metres, radians) or check calibration.') from error
                     finally:
                         del following
                     start_method = 'confirmed_scan_to_map'
@@ -155,8 +169,8 @@ def run(args, output):
                 rejected.setdefault(row.rejection_reason, []).append(row.t)
         rejection_counts = {reason: len(times) for reason, times in rejected.items()}
         if not counts['matched']:
-            raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
-                             f'Rejections: {json.dumps(rejection_counts)}')
+            raise ValueError('No scan matched the map. Check initial pose (YAW in radians), frames '
+                             f'and height band. Rejections: {json.dumps(rejection_counts)}')
     with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['t', 'x', 'y', 'yaw', 'status', 'inlier_fraction'])
@@ -196,8 +210,10 @@ def main():
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')
-            group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
-            group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
+            group.add_argument('--initial', type=pose_number, nargs=3, metavar=('X', 'Y', 'YAW'),
+                               help=INITIAL_HELP)
+            group.add_argument('--initial-file', type=Path,
+                               help='JSON array [x, y, yaw] in the map frame, metres and radians')
         if name == 'localize':
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
