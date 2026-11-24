@@ -14,6 +14,11 @@ from .deskew import deskew_points
 from .leveling import build_leveler
 
 
+POINT_TYPES = {1: 'int8', 2: 'uint8', 3: 'int16', 4: 'uint16', 5: 'int32', 6: 'uint32', 7: 'float32', 8: 'float64'}
+# Longest plausible spread of per-point times within one cloud; beyond it the unit is wrong.
+MAX_SWEEP_S = 1.0
+
+
 def reader(path):
     return AnyReader([Path(path)], default_typestore=get_typestore(Stores.ROS2_HUMBLE))
 
@@ -47,6 +52,10 @@ def inspect_bag(path, inventory=False):
                 frames.add(msg.header.frame_id)
                 if hasattr(msg, 'fields') and 'fields' not in info:
                     info['fields'] = [f.name for f in msg.fields]
+                    info['field_types'] = {f.name: POINT_TYPES.get(f.datatype, f'datatype {f.datatype}')
+                                           + (f'[{f.count}]' if f.count != 1 else '') for f in msg.fields}
+                    info['cloud_layout'] = dict(height=msg.height, width=msg.width, point_step=msg.point_step,
+                                                is_dense=bool(msg.is_dense))
             if times:
                 dt = np.diff(times)
                 positive = dt[dt > 0]
@@ -258,6 +267,9 @@ def scans(path, cfg):
                 elapsed = cloud_field(m, point_time['field'], formats)[finite].astype(float) * unit
                 if not np.isfinite(elapsed).all():
                     raise ValueError('Non-finite per-point time offsets')
+                if np.ptp(elapsed) > MAX_SWEEP_S:
+                    raise ValueError(f'Per-point times in one cloud span {np.ptp(elapsed):.3g} s at t={t:.3f}; '
+                                     f'check point_time unit {point_time["unit"]!r} and field {point_time["field"]!r}')
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
                 if interval_samples(odom[:, 0], begin, end, gap) is None:
                     reason = 'deskew_odom_unavailable'
