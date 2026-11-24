@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import zipfile
@@ -45,6 +46,18 @@ def test_diagnostics_from_zip(tmp_path):
     out = tmp_path / 'solve'
     subprocess.run([sys.executable, '-m', 'mgts_nav.solve', str(data/'mapping'), str(data/'inspection'),
                     '--config', str(PROFILE), '--out', str(out)], check=True)
+    # Detect a nested interpreter that accidentally imports the checkout or a user override.
+    marker = tmp_path / 'unisolated-child'
+    (tmp_path/'sitecustomize.py').write_text(
+        f'from pathlib import Path\nPath({str(marker)!r}).touch()\n', encoding='utf-8')
+    packed_out = tmp_path / 'packed-solve'
+    subprocess.run([*prefix, 'mgts_nav.solve', str(data/'mapping'), str(data/'inspection'),
+                    '--config', str(PROFILE), '--out', str(packed_out)], check=True,
+                   env=dict(os.environ, PYTHONPATH=str(tmp_path)))
+    assert not marker.exists()
+    for path in ('map/map.pgm', 'map/map.yaml', 'map/trajectory.csv', 'inspection/trajectory.csv',
+                 'inspection/continuous.csv', 'baseline/trajectory.csv'):
+        assert (packed_out/path).read_bytes() == (out/path).read_bytes(), path
     args = ['mgts_nav.interior_loop', str(data/'mapping'), str(out/'map/trajectory.csv'),
             '--config', str(out/'profiles/mapping.json')]
     packaged = subprocess.check_output([*prefix, *args])

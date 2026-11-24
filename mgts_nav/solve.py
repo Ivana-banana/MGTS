@@ -14,6 +14,16 @@ from .ros_export import export
 from .zones import load_zones, read_visits, write_visits
 
 
+def module_command(module, *args):
+    archive = getattr(__loader__, 'archive', None)
+    if archive:
+        # A fresh interpreter does not inherit the parent's zipimport search path.
+        bootstrap = ("import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); "
+                     "runpy.run_module(sys.argv.pop(1), run_name='__main__', alter_sys=True)")
+        return [sys.executable, '-I', '-c', bootstrap, str(Path(archive).resolve()), module, *map(str, args)]
+    return [sys.executable, '-m', module, *map(str, args)]
+
+
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
           start_search=None, zones=None, zone_max_gap=None):
@@ -44,7 +54,7 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         check_recording(mapping, profiles / 'mapping.json')
         cfg = check_recording(inspection, profiles / 'inspection.json')
         def invoke(*args):
-            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
+            subprocess.run(module_command('mgts_nav', *args), check=True)
         map_flags = ['--close-loop'] if close_loop else []
         if grid_dll is not None:
             map_flags.extend(['--grid-dll', grid_dll])
@@ -71,9 +81,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries))
             (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         if cfg['odom'] is not None:
-            baseline = subprocess.run([sys.executable, '-m', 'mgts_nav', 'baseline', str(inspection),
+            baseline = subprocess.run(module_command('mgts_nav', 'baseline', str(inspection),
                                        '--config', str(profiles / 'inspection.json'), '--initial',
-                                       *map(str, summary['initial_pose']), '--out', str(stage / 'baseline')],
+                                       *map(str, summary['initial_pose']), '--out', str(stage / 'baseline')),
                                       capture_output=True, text=True)
             if baseline.returncode:
                 # The two main products remain usable when the comparison lacks an anchor.
@@ -81,8 +91,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
                     raise ValueError(baseline.stderr.strip() or 'Baseline failed')
                 (stage / 'baseline-status.txt').write_text(baseline.stderr.strip(), encoding='utf-8')
             dense = result / 'continuous.csv'
-            continuous = subprocess.run([sys.executable, '-m', 'mgts_nav.continuous', str(inspection),
-                                         str(route), str(dense), '--config', str(profiles / 'inspection.json')],
+            continuous = subprocess.run(module_command('mgts_nav.continuous', inspection,
+                                         route, dense, '--config', profiles / 'inspection.json'),
                                         capture_output=True, text=True)
             if continuous.returncode:
                 raise ValueError(continuous.stderr.strip() or 'Continuous trajectory failed')
