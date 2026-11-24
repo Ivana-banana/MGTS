@@ -78,6 +78,23 @@ def cloud_xyz(msg):
     return np.column_stack([cloud_field(msg, name, {7: 'f4', 8: 'f8'}) for name in 'xyz'])
 
 
+def point_offsets(msg, spec, finite):
+    """Seconds from the raw lidar header; clock correction cancels in this difference."""
+    mode = spec.get('semantics', 'signed')
+    formats = {8: 'f8'} if mode == 'absolute' else {3: 'i2', 4: 'u2', 5: 'i4', 6: 'u4', 7: 'f4', 8: 'f8'}
+    values = cloud_field(msg, spec['field'], formats)[finite].astype(float)
+    if not np.isfinite(values).all():
+        raise ValueError('Non-finite per-point time offsets')
+    if mode == 'absolute':
+        return values - stamp(msg)
+    scale = {'s': 1.0, 'ms': 1e-3, 'us': 1e-6, 'ns': 1e-9}[spec['unit']]
+    if mode == 'backward':
+        if np.any(values < 0):
+            raise ValueError('Backward point_time durations must be nonnegative')
+        scale = -scale
+    return values * scale
+
+
 def connections(bag, cfg):
     result = {}
     for key, typ in [('lidar', 'sensor_msgs/msg/PointCloud2'), ('imu', 'sensor_msgs/msg/Imu'),
@@ -143,6 +160,11 @@ def load_config(path):
         if (not isinstance(point_time, dict) or not isinstance(point_time.get('field'), str)
                 or not point_time['field'].strip() or point_time.get('unit') not in ('s', 'ms', 'us', 'ns')):
             raise ValueError('point_time requires a field name and unit s/ms/us/ns')
+        mode = point_time.get('semantics', 'signed')
+        if set(point_time) - {'field', 'unit', 'semantics'} or mode not in ('signed', 'backward', 'absolute'):
+            raise ValueError('point_time supports field, unit and semantics signed/backward/absolute')
+        if mode == 'absolute' and point_time['unit'] != 's':
+            raise ValueError('Absolute point_time requires float64 seconds on the raw lidar header clock')
     if point_time is not None and cfg['odom'] is None:
         raise ValueError('Deskew requires a kinematic odometry topic')
     if cfg.get('gravity_level') and cfg['imu'] is None:
@@ -263,11 +285,7 @@ def scans(path, cfg):
             xyz = xyz @ lidar_rot.as_matrix().T + offset
             point_time = cfg.get('point_time')
             if point_time is not None and len(xyz):
-                unit = {'s': 1.0, 'ms': 1e-3, 'us': 1e-6, 'ns': 1e-9}[point_time['unit']]
-                formats = {3: 'i2', 4: 'u2', 5: 'i4', 6: 'u4', 7: 'f4', 8: 'f8'}
-                elapsed = cloud_field(m, point_time['field'], formats)[finite].astype(float) * unit
-                if not np.isfinite(elapsed).all():
-                    raise ValueError('Non-finite per-point time offsets')
+                elapsed = point_offsets(m, point_time, finite)
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
                 span = interval_samples(odom[:, 0], begin, end, gap)
                 if span is None:
