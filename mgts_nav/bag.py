@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from rosbags.highlevel import AnyReader
+from rosbags.highlevel import AnyReader, AnyReaderError
 from rosbags.serde.errors import SerdeError
 from rosbags.typesys.base import TypesysError
 from rosbags.typesys import Stores, get_typestore
@@ -99,20 +99,67 @@ def check_frame(actual, expected):
 
 def load_config(path):
     cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
+        raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
+    names = ['lidar', 'lidar_frame']
+    vectors = {'height_band_m': 2, 'base_from_lidar_xyz_m': 3, 'base_from_lidar_xyzw': 4}
+    for role in ('imu', 'odom'):
+        if role not in cfg:
+            raise ValueError(f'{path}: set {role} to a topic name or null')
+        if cfg[role] is not None:
+            names.extend([role, role + '_frame'])
+    if cfg['imu'] is not None:
+        vectors['base_from_imu_xyzw'] = 4
+    if cfg['odom'] is not None:
+        names.append('base_frame')
+    for key in names:
+        if not isinstance(cfg.get(key), str) or not cfg[key].strip():
+            raise ValueError(f'{path}: supply a topic or frame name for {key}')
+
+    def finite_number(value):
+        return type(value) in (int, float) and np.isfinite(value)
+
+    for key, size in vectors.items():
+        value = cfg.get(key)
+        if not isinstance(value, list) or len(value) != size or not all(map(finite_number, value)):
+            raise ValueError(f'{path}: {key} needs {size} finite numbers')
+        if size == 4 and np.linalg.norm(value) == 0:
+            raise ValueError(f'{path}: {key} has a zero quaternion')
+    for key in ('max_sync_gap_s', 'stationary_s'):
+        if not finite_number(cfg.get(key)):
+            raise ValueError(f'{path}: {key} needs a finite duration in seconds')
     if cfg['max_sync_gap_s'] <= 0 or cfg['stationary_s'] < 0:
-        raise ValueError('Invalid timing parameters')
+        raise ValueError('Require max_sync_gap_s > 0 and stationary_s >= 0')
     if not cfg['height_band_m'][0] < cfg['height_band_m'][1]:
         raise ValueError('Invalid height band')
-    for key, value in cfg.get('header_offset_s', {}).items():
-        if key not in ('lidar', 'imu', 'odom') or not np.isfinite(value):
+    offsets = cfg.get('header_offset_s', {})
+    if not isinstance(offsets, dict):
+        raise ValueError('header_offset_s must be an object with offsets in seconds')
+    for key, value in offsets.items():
+        if key not in ('lidar', 'imu', 'odom') or not finite_number(value):
             raise ValueError('header_offset_s takes finite offsets for lidar/imu/odom')
     point_time = cfg.get('point_time')
-    if point_time is not None and (not point_time.get('field') or point_time.get('unit') not in ('s','ms','us','ns')):
-        raise ValueError('point_time requires a field name and unit s/ms/us/ns')
+    if point_time is not None:
+        if (not isinstance(point_time, dict) or not isinstance(point_time.get('field'), str)
+                or not point_time['field'].strip() or point_time.get('unit') not in ('s', 'ms', 'us', 'ns')):
+            raise ValueError('point_time requires a field name and unit s/ms/us/ns')
     if point_time is not None and cfg['odom'] is None:
         raise ValueError('Deskew requires a kinematic odometry topic')
     if cfg.get('gravity_level') and cfg['imu'] is None:
         raise ValueError('Gravity leveling requires an IMU topic')
+    return cfg
+
+
+def check_recording(path, profile):
+    """Validate a sensor profile against bag metadata before processing either route."""
+    cfg = load_config(profile)
+    try:
+        with reader(path) as bag:
+            for role, conns in connections(bag, cfg).items():
+                if conns and not any(conn.msgcount for conn in conns):
+                    raise ValueError(f'No messages on selected {role} topic {cfg[role]}')
+    except (AnyReaderError, ValueError, OSError) as exc:
+        raise ValueError(f'{path}: {exc}') from exc
     return cfg
 
 

@@ -7,6 +7,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
+from .bag import check_recording
 from .ros_export import export
 
 
@@ -27,6 +28,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         profiles.mkdir()
         shutil.copyfile(profile, profiles / 'mapping.json')
         shutil.copyfile(inspection_profile or profile, profiles / 'inspection.json')
+        check_recording(mapping, profiles / 'mapping.json')
+        cfg = check_recording(inspection, profiles / 'inspection.json')
         def invoke(*args):
             subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
         map_flags = ['--close-loop'] if close_loop else []
@@ -44,7 +47,6 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
                '--map', map_dir / 'map.yaml', '--out', result, *options)
         summary = json.loads((result / 'summary.json').read_text(encoding='utf-8'))
         # Both methods get the same start, including when it was estimated by scan matching.
-        cfg = json.loads((profiles / 'inspection.json').read_text(encoding='utf-8-sig'))
         route = result / 'trajectory.csv'
         if cfg['odom'] is not None:
             baseline = subprocess.run([sys.executable, '-m', 'mgts_nav', 'baseline', str(inspection),
