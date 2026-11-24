@@ -24,7 +24,7 @@ FILES = tuple(sorted((
     'tools/evaluate_deskew.py', 'docs/deskew-experiment.md',
     'docs/plan-alignment.md', 'docs/plan-landmarks.json', 'docs/office-plan.png', 'docs/plan-route.png',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
-    'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
+    'docs/scan-rejections.md', 'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
     *(f'mgts_nav/{name}.py' for name in MODULES),
 )))
 

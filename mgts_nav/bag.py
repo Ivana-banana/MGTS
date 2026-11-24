@@ -170,6 +170,7 @@ class Scan:
     origin: np.ndarray
     odom: np.ndarray | None
     gyro_delta: float | None
+    empty_reason: str | None = None
 
 
 def interval_samples(times, start, end, gap):
@@ -244,8 +245,11 @@ def scans(path, cfg):
             if last is not None and t <= last:
                 raise ValueError('LiDAR header time went backwards or repeated')
             xyz = cloud_xyz(m)
+            reason = None if len(xyz) else 'empty_input'
             finite = np.isfinite(xyz).all(axis=1)
             xyz = xyz[finite]
+            if not len(xyz) and reason is None:
+                reason = 'no_finite_points'
             xyz = xyz @ lidar_rot.as_matrix().T + offset
             point_time = cfg.get('point_time')
             if point_time is not None and len(xyz):
@@ -256,6 +260,7 @@ def scans(path, cfg):
                     raise ValueError('Non-finite per-point time offsets')
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
                 if interval_samples(odom[:, 0], begin, end, gap) is None:
+                    reason = 'deskew_odom_unavailable'
                     xyz = xyz[:0]
                 else:
                     xyz = deskew_points(xyz, elapsed, t, odom, gap)
@@ -264,12 +269,15 @@ def scans(path, cfg):
                 try:
                     leveling = leveler.at(t)
                 except ValueError:
+                    reason = reason or 'leveling_unavailable'
                     xyz = xyz[:0]
                 else:
                     xyz = xyz @ leveling.as_matrix().T
                     origin = leveling.apply(offset)
             low, high = cfg['height_band_m']
             xy = xyz[(xyz[:, 2] >= low) & (xyz[:, 2] <= high), :2]
+            if len(xyz) and not len(xy):
+                reason = 'outside_height_band'
             # One representative per voxel keeps dense sensors affordable.
             _, index = np.unique(np.floor(xy / 0.06), axis=0, return_index=True)
             prior = None
@@ -282,5 +290,5 @@ def scans(path, cfg):
                     inner = gt[s]
                     times = np.r_[last, inner[(inner > last) & (inner < t)], t]
                     delta = np.trapezoid(np.interp(times, gt[s], yaw_rate[s]), times)
-            yield Scan(t, xy[index], origin[:2], prior, delta)
+            yield Scan(t, xy[index], origin[:2], prior, delta, reason)
             last = t

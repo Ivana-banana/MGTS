@@ -6,6 +6,9 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
+MIN_MATCH_POINTS = 12
+
+
 def rotation(yaw):
     c, s = np.cos(yaw), np.sin(yaw)
     return np.array([[c, -s], [s, c]])
@@ -33,14 +36,14 @@ def match(scan, tree, seed, radius=0.45):
     """Trimmed point-to-point ICP. Return the prior if support is insufficient."""
     pose = seed.copy()
     fraction = 0.0
-    if len(scan) < 12:
+    if len(scan) < MIN_MATCH_POINTS:
         return seed, fraction, False
     for _ in range(24):
         src = world(scan, pose)
         distances, indices = tree.query(src, distance_upper_bound=radius)
         valid = np.isfinite(distances)
         fraction = float(valid.mean())
-        if fraction < 0.40 or valid.sum() < 12:
+        if fraction < 0.40 or valid.sum() < MIN_MATCH_POINTS:
             return seed, fraction, False
         keep = valid & (distances <= max(0.06, np.quantile(distances[valid], 0.85)))
         a, b = src[keep], tree.data[indices[keep]]
@@ -71,6 +74,7 @@ class Estimate:
     pose: np.ndarray
     status: str
     inliers: float
+    rejection_reason: str | None = None
 
 
 def track(stream, initial, *, grid=None, map_points=None, recovery=None):
@@ -88,7 +92,7 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None):
         predicted = predict(pose, previous, scan)
         previous = scan.odom
         pose, support, status = predicted, 0.0, 'prediction_only'
-        if tree is None and len(scan.xy) >= 12:
+        if tree is None and len(scan.xy) >= MIN_MATCH_POINTS:
             status = 'origin'
         elif tree is not None:
             pose, support, accepted = match(scan.xy, tree, predicted)
@@ -112,4 +116,12 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None):
                 _, ids = np.unique(np.floor(joined / 0.06), axis=0, return_index=True)
                 tree = cKDTree(joined[ids])
                 keypose = pose.copy()
-        yield Estimate(scan.t, pose.copy(), status, support)
+        reason = None
+        if status == 'prediction_only':
+            if not len(scan.xy):
+                reason = getattr(scan, 'empty_reason', None) or 'no_usable_points'
+            elif len(scan.xy) < MIN_MATCH_POINTS:
+                reason = 'too_few_points'
+            else:
+                reason = 'icp_rejected'
+        yield Estimate(scan.t, pose.copy(), status, support, reason)

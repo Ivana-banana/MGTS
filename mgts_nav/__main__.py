@@ -125,8 +125,15 @@ def run(args, output):
     if not estimates:
         raise ValueError('No scans in recording')
     counts = Counter(r.status for r in estimates)
-    if args.command == 'localize' and not counts['matched']:
-        raise ValueError('No scan matched the map. Check initial pose, frames and height band.')
+    if args.command == 'localize':
+        rejected = {}
+        for row in estimates:
+            if row.rejection_reason is not None:
+                rejected.setdefault(row.rejection_reason, []).append(row.t)
+        rejection_counts = {reason: len(times) for reason, times in rejected.items()}
+        if not counts['matched']:
+            raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
+                             f'Rejections: {json.dumps(rejection_counts)}')
     with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['t', 'x', 'y', 'yaw', 'status', 'inlier_fraction'])
@@ -139,6 +146,7 @@ def run(args, output):
     if args.command == 'localize':
         from .quality import inspection_quality
         summary['quality'] = inspection_quality(estimates)
+        summary['scan_rejections'] = dict(counts=rejection_counts, timestamps_s=rejected)
     if visual_stats:
         summary['visual_yaw'] = visual_stats
     if recovery is not None:
