@@ -79,7 +79,8 @@ def reference(times, transforms):
     return np.column_stack((aligned[:, :2], np.arctan2(np.sin(yaw-yaw[0]), np.cos(yaw-yaw[0]))))
 
 
-def prepare(stage):
+def prepare(stage, held_out=False):
+    visits = dict(VISITS, inspection=(2620, 2800)) if held_out else VISITS
     with urlopen(f"{ROOT}/metadata/tf.yaml", timeout=30) as reply:
         transforms = yaml.safe_load(reply)
     xyz, quat = extrinsics(transforms, "base", "velodyne_lidar")
@@ -92,14 +93,14 @@ def prepare(stage):
                    imu_frame="anymal_imu", base_from_imu_xyzw=imu_quat, odom=None,
                    stationary_s=0, max_sync_gap_s=.05, height_band_m=[.15, 1.5])
     (stage / "profile.json").write_text(json.dumps(profile, indent=2), encoding="utf-8")
-    first, end = VISITS["mapping"][0], VISITS["inspection"][1]
+    first, end = visits["mapping"][0], visits["inspection"][1]
     times = read_window("timestamp", "<f8", window=slice(first, end))
     valid = read_window("valid", "<u4", window=slice(first, end))
     truth = reference(times, transforms)
     clock = imu["timestamp"]
     store = get_typestore(Stores.ROS2_HUMBLE)
     details = {}
-    for bag, (start, stop) in VISITS.items():
+    for bag, (start, stop) in visits.items():
         window = slice(start-first, stop-first)
         t = times[window]
         chunk, offset = divmod(start, 512)
@@ -120,8 +121,8 @@ def prepare(stage):
             writer.writerow(["t", "x", "y", "yaw"])
             writer.writerows(np.column_stack((t, truth[window])))
         details[bag] = dict(start=t[0], end=t[-1], imu_max_gap_s=gaps.max())
-    ref_map = truth[:VISITS["mapping"][1]-first, :2]
-    ref_inspection = truth[VISITS["inspection"][0]-first:, :2]
+    ref_map = truth[:visits["mapping"][1]-first, :2]
+    ref_inspection = truth[visits["inspection"][0]-first:, :2]
     details["max_distance_from_mapping_start_m"] = np.linalg.norm(truth[:, :2], axis=1).max()
     details["max_inspection_distance_to_mapping_track_m"] = cKDTree(ref_map).query(ref_inspection)[0].max()
     (stage/"reference-summary.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
@@ -131,12 +132,14 @@ def prepare(stage):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
-    output = parser.parse_args().out
+    parser.add_argument("--held-out", action="store_true", help="Use inspection frames 2620 through 2799")
+    args = parser.parse_args()
+    output = args.out
     if output.exists():
         parser.error("Choose a new output directory")
     output.parent.mkdir(exist_ok=True, parents=True)
     with TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)/"dataset"
         stage.mkdir()
-        prepare(stage)
+        prepare(stage, args.held_out)
         stage.rename(output)
