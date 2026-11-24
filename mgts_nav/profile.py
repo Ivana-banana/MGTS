@@ -7,10 +7,12 @@ from pathlib import Path
 from rosbags.serde.errors import SerdeError
 from rosbags.typesys.base import TypesysError
 
-from .bag import reader
+from .bag import POINT_TYPES, reader
 from .calibration import extrinsics, read_edges
 
 
+# Names drivers use for per-point acquisition time (Ouster t, Velodyne/Hesai time, Livox offset_time).
+TIME_FIELDS = ('t', 'time', 'timestamp', 'offset_time', 'time_offset', 'ts', 'relative_time')
 TYPES = {'lidar': 'sensor_msgs/msg/PointCloud2', 'imu': 'sensor_msgs/msg/Imu',
          'odom': 'nav_msgs/msg/Odometry'}
 
@@ -41,7 +43,7 @@ def draft_profile(path, *, lidar=None, imu=None, odom=None, base=None, tf_topic=
                 continue
             if any(name == topic and typ != msgtype for name, typ in inventory):
                 raise ValueError(f'Conflicting message types on {topic}')
-            frames, children = set(), set()
+            frames, children, fields = set(), set(), {}
             checked = 0
             complete = True
             for conn in (c for c in bag.connections if c.topic == topic):
@@ -57,7 +59,17 @@ def draft_profile(path, *, lidar=None, imu=None, odom=None, base=None, tf_topic=
                     frames.add(msg.header.frame_id)
                     if key == 'odom':
                         children.add(msg.child_frame_id)
+                    if key == 'lidar' and not fields:
+                        fields = {f.name: POINT_TYPES.get(f.datatype, str(f.datatype)) for f in msg.fields}
             observations[topic] = dict(checked_messages=checked, header_frame_ids=sorted(frames))
+            if key == 'lidar' and fields:
+                observations[topic]['point_fields'] = fields
+                timing = [name for name in fields if name.lower() in TIME_FIELDS]
+                if timing:
+                    questions.append(f'{topic} has per-point time field(s) {timing} ({[fields[n] for n in timing]}). '
+                                     'Is it relative to header.stamp, in which unit, and is the header at the start '
+                                     'or the end of the sweep? Relative offsets go to point_time; absolute stamps '
+                                     'need an adapter.')
             if complete and len(frames) == 1 and '' not in frames:
                 config[key + '_frame'] = frames.pop()
             else:
