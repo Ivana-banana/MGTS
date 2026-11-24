@@ -1,5 +1,6 @@
 """Sparse occupancy evidence, exported in ROS map_server PGM + YAML convention."""
 from collections import defaultdict
+from math import isfinite
 from pathlib import Path
 
 import numpy as np
@@ -55,14 +56,45 @@ class Grid:
 
 def read_map(path):
     path = Path(path)
-    meta = yaml.safe_load(path.read_text(encoding='utf-8'))
+    try:
+        meta = yaml.safe_load(path.read_text(encoding='utf-8'))
+    except yaml.YAMLError as exc:
+        raise ValueError(f'{path}: invalid map YAML: {exc}') from exc
+    if not isinstance(meta, dict):
+        raise ValueError(f'{path}: expected a YAML mapping of map fields')
+
+    def finite_number(value):
+        try:
+            return type(value) in (float, int) and isfinite(value)
+        except OverflowError:
+            return False
+
+    coords = meta.get('origin')
+    if not isinstance(coords, list) or len(coords) != 3 or not all(map(finite_number, coords)):
+        raise ValueError(f'{path}: origin must contain three finite numbers [x, y, yaw]')
+    if coords[2] != 0:
+        raise ValueError(f'{path}: origin yaw must be zero for an axis-aligned map')
+    if meta.get('negate', 0) != 0:
+        raise ValueError(f'{path}: negate must be zero')
+    resolution = meta.get('resolution')
+    if not finite_number(resolution) or resolution <= 0:
+        raise ValueError(f'{path}: resolution must be finite and positive')
+    for field in ('free_thresh', 'occupied_thresh'):
+        threshold = meta.get(field)
+        if not finite_number(threshold) or not 0 <= threshold <= 1:
+            raise ValueError(f'{path}: {field} must be a finite probability between 0 and 1')
+    if meta['free_thresh'] >= meta['occupied_thresh']:
+        raise ValueError(f'{path}: free_thresh must be less than occupied_thresh')
+    if not isinstance(meta.get('image'), str) or not meta['image'].strip():
+        raise ValueError(f'{path}: image must name a map image file')
     with Image.open(path.parent / meta['image']) as image:
         pixels = np.array(image.convert('L'))
     origin = np.asarray(meta['origin'], dtype=float)
-    if origin[2] != 0 or meta.get('negate', 0) != 0:
-        raise ValueError('Expected an axis-aligned, non-negated MGTS map')
     y, x = np.where((1.0 - pixels / 255.0) > meta['occupied_thresh'])
-    points = origin[:2] + (np.column_stack([x, len(pixels) - 1 - y]) + 0.5) * meta['resolution']
+    with np.errstate(over='ignore'):
+        points = origin[:2] + (np.column_stack([x, len(pixels) - 1 - y]) + 0.5) * resolution
+    if not np.isfinite(points).all():
+        raise ValueError(f'{path}: origin and resolution produce non-finite map coordinates')
     if len(points) < 12:
         raise ValueError('Map has too few occupied cells')
     return pixels, meta, points
