@@ -22,6 +22,7 @@ FILES = tuple(sorted((
     'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
+    'tools/plot_heap1_revisit.py', 'docs/heap1-field.png',
     'tools/evaluate_camera.py', 'docs/camera-experiment.md', 'docs/image-pairs.md',
     'tools/evaluate_deskew.py', 'docs/deskew-experiment.md',
     'docs/coarse-start.md', 'docs/delayed-start.md', 'docs/delayed-start-controls.md',
