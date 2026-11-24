@@ -101,7 +101,7 @@ def lidar_points(pose, elapsed, profile, rng, walls=WALLS, dropout=0.10):
     return sensor.apply(base_relative).astype("<f4")
 
 
-def record(directory, run, profile, store, seed, layout="office", storage="sqlite3"):
+def record(directory, run, profile, store, seed, layout="office", storage="sqlite3", *, duration=None):
     duration = DURATION[run] if duration is None else duration
     rng = np.random.default_rng(seed)
     types = store.types
