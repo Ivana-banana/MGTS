@@ -22,6 +22,9 @@ def read_csv(path):
     with Path(path).open(encoding="utf-8-sig", newline="") as stream:
         rows = csv.DictReader(stream)
         if not set(Pose._fields).issubset(rows.fieldnames or []):
+            if any(';' in name for name in rows.fieldnames or []):
+                raise ValueError(f"{path}: columns are separated by ';'. Save the file as CSV with comma "
+                                 "separators and a dot as the decimal mark (t,x,y,yaw)")
             raise ValueError(f"{path}: required columns are t,x,y,yaw")
         for line, row in enumerate(rows, 2):
             try:
