@@ -1,6 +1,7 @@
 """Process an official mapping/inspection bag pair on CPU, without ground truth."""
 import argparse
 import json
+from math import isfinite
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,11 +11,16 @@ from tempfile import TemporaryDirectory
 from .bag import check_recording
 from .delayed_start import START_SEARCHES
 from .ros_export import export
+from .zones import load_zones, read_visits, write_visits
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
-          start_search=None):
+          start_search=None, zones=None, zone_max_gap=None):
+    if (zones is None) != (zone_max_gap is None):
+        raise ValueError('Supply --zones and --zone-max-gap together')
+    if zone_max_gap is not None and (not isfinite(zone_max_gap) or zone_max_gap <= 0):
+        raise ValueError('--zone-max-gap must be positive and finite')
     if start_search is not None and (start_search not in START_SEARCHES or initial is not None or confirm_start):
         raise ValueError('--start-search requires a supported search and conflicts with --initial and --confirm-start')
     if initial is not None and confirm_start:
@@ -32,6 +38,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         profiles.mkdir()
         shutil.copyfile(profile, profiles / 'mapping.json')
         shutil.copyfile(inspection_profile or profile, profiles / 'inspection.json')
+        if zones is not None:
+            shutil.copyfile(zones, profiles / 'zones.json')
+            polygons = load_zones(profiles / 'zones.json')
         check_recording(mapping, profiles / 'mapping.json')
         cfg = check_recording(inspection, profiles / 'inspection.json')
         def invoke(*args):
@@ -56,6 +65,11 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         summary = json.loads((result / 'summary.json').read_text(encoding='utf-8'))
         # Both methods get the same start, including when it was estimated by scan matching.
         route = result / 'trajectory.csv'
+        if zones is not None:
+            entries = read_visits(route, polygons, zone_max_gap)
+            write_visits(result / 'zone-visits.csv', entries)
+            summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries))
+            (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         if cfg['odom'] is not None:
             baseline = subprocess.run([sys.executable, '-m', 'mgts_nav', 'baseline', str(inspection),
                                        '--config', str(profiles / 'inspection.json'), '--initial',
@@ -85,6 +99,8 @@ if __name__ == '__main__':
     parser.add_argument('inspection', type=Path)
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--inspection-config', type=Path, help='Override mapping sensor profile')
+    parser.add_argument('--zones', type=Path, help='Map-frame inspection zone polygons')
+    parser.add_argument('--zone-max-gap', type=float, metavar='SECONDS', help='Largest gap allowed inside a zone visit')
     start = parser.add_mutually_exclusive_group()
     start.add_argument('--start-search', choices=START_SEARCHES)
     start.add_argument('--confirm-start', action='store_true',
@@ -100,6 +116,6 @@ if __name__ == '__main__':
     try:
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
-              args.recover, args.confirm_start, args.grid_dll, args.start_search)
+              args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

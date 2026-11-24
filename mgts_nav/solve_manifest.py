@@ -12,6 +12,7 @@ REQUIRED = (
     "map/summary.json", "map/trajectory.csv", "inspection/summary.json", "inspection/trajectory.csv",
 )
 OPTIONAL = (
+    "profiles/zones.json", "inspection/zone-visits.csv",
     "map/route.png", "map/loop.json", "inspection/route.png", "inspection/continuous.csv",
     "inspection/continuous-summary.json", "baseline/trajectory.csv", "baseline-status.txt",
 )

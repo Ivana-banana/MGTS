@@ -97,6 +97,19 @@ def visits(rows, zones, max_gap):
     return sorted(report, key=lambda row: (row[1], row[0]))
 
 
+def read_visits(trajectory, zones, max_gap):
+    with trajectory.open(encoding='utf-8-sig', newline='') as source:
+        rows = csv.DictReader(source)
+        if not {'t', 'x', 'y', 'status'}.issubset(rows.fieldnames or []):
+            raise ValueError('Expected columns t, x, y, status')
+        return visits(rows, zones, max_gap)
+
+
+def write_visits(path, result):
+    with path.open('x', encoding='utf-8', newline='') as output:
+        csv.writer(output).writerows([COLUMNS, *result])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('trajectory', type=Path)
@@ -106,14 +119,9 @@ def main():
     args = parser.parse_args()
     try:
         zones = load_zones(args.zones)
-        with args.trajectory.open(encoding='utf-8-sig', newline='') as source:
-            rows = csv.DictReader(source)
-            if not {'t', 'x', 'y', 'status'}.issubset(rows.fieldnames or []):
-                raise ValueError('Expected columns t, x, y, status')
-            result = visits(rows, zones, args.max_gap)
+        result = read_visits(args.trajectory, zones, args.max_gap)
         if args.out:
-            with args.out.open('x', encoding='utf-8', newline='') as output:
-                csv.writer(output).writerows([COLUMNS, *result])
+            write_visits(args.out, result)
         else:
             csv.writer(sys.stdout, lineterminator='\n').writerows([COLUMNS, *result])
     except (OSError, ValueError, TypeError) as exc:
