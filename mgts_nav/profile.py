@@ -118,12 +118,12 @@ def main():
     try:
         report = draft_profile(args.bag, lidar=args.lidar, imu=args.imu, odom=args.odom,
                                base=args.base, tf_topic=args.tf_topic, verify_frames=args.verify_frames)
-        serialized = json.dumps(report, ensure_ascii=False, indent=2)
         if args.out:
             with args.out.open('x', encoding='utf-8') as file:
-                file.write(serialized + '\n')
+                file.write(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
         else:
-            print(serialized)
+            # A redirected Windows stdout uses the ANSI code page. Escapes keep the JSON intact.
+            print(json.dumps(report, ensure_ascii=True, indent=2))
     except (OSError, ValueError) as exc:
         parser.exit(2, f'{exc}\n')
 
