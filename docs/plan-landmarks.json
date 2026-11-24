@@ -1,0 +1,59 @@
+{
+  "metres_per_pixel": 0.02,
+  "map_m": {
+    "southwest": [
+      -4.2,
+      -2.0
+    ],
+    "northeast": [
+      5.2,
+      4.8
+    ],
+    "cabinet": [
+      2.8,
+      2.6
+    ],
+    "door": [
+      3.8,
+      -1.4
+    ],
+    "pillar": [
+      0.7,
+      3.3
+    ],
+    "shelf": [
+      -2.8,
+      -0.5
+    ]
+  },
+  "plan_px": {
+    "southwest": [
+      186,
+      658
+    ],
+    "northeast": [
+      579,
+      119
+    ],
+    "cabinet": [
+      487,
+      282
+    ],
+    "door": [
+      613,
+      483
+    ],
+    "pillar": [
+      360,
+      281
+    ],
+    "shelf": [
+      236,
+      551
+    ]
+  },
+  "check": [
+    "pillar",
+    "shelf"
+  ]
+}

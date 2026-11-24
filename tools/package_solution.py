@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
     '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'continuous', 'demo',
     'deskew', 'grid', 'initialization', 'leveling', 'loop', 'map_eval', 'metrics',
-    'multiscan', 'observability', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
+    'multiscan', 'observability', 'plan_alignment', 'pose_graph', 'profile', 'quality', 'recovery', 'rehearse',
     'ros_export', 'slam', 'solve', 'start_confirmation', 'stress', 'vision', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
@@ -21,6 +21,7 @@ FILES = tuple(sorted((
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
     'tools/evaluate_camera.py', 'docs/camera-experiment.md',
+    'docs/plan-alignment.md', 'docs/plan-landmarks.json', 'docs/office-plan.png', 'docs/plan-route.png',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
     'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
     *(f'mgts_nav/{name}.py' for name in MODULES),
