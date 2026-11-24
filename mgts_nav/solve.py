@@ -12,7 +12,7 @@ from .ros_export import export
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
-          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False):
+          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None):
     if initial is not None and confirm_start:
         raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
     output = Path(output)
@@ -33,6 +33,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         def invoke(*args):
             subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
         map_flags = ['--close-loop'] if close_loop else []
+        if grid_dll is not None:
+            map_flags.extend(['--grid-dll', grid_dll])
         if mapping_visual_pairs:
             map_flags.extend(['--visual-pairs', mapping_visual_pairs])
         invoke('map', mapping, '--config', profiles / 'mapping.json', '--out', map_dir, *map_flags)
@@ -83,6 +85,7 @@ if __name__ == '__main__':
     start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
+    parser.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS occupancy-grid DLL for mapping')
     parser.add_argument('--mapping-visual-pairs', type=Path)
     parser.add_argument('--inspection-visual-pairs', type=Path)
     parser.add_argument('--recover', action='store_true')
@@ -90,6 +93,6 @@ if __name__ == '__main__':
     try:
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
-              args.recover, args.confirm_start)
+              args.recover, args.confirm_start, args.grid_dll)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

@@ -23,6 +23,7 @@ def test_reproducible_committed_runtime(tmp_path):
         }
         assert {name for name in names if name.startswith('tools/')} == {
             'tools/plot_quality.py', 'tools/evaluate_camera.py', 'tools/evaluate_deskew.py',
+            'tools/native_grid.cpp', 'tools/benchmark_native_grid.py',
         }
         assert all(name.startswith(('mgts_nav/', 'docs/', 'configs/', 'tools/'))
                    or name in ('README.md', 'requirements.txt') for name in names)

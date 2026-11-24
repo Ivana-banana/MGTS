@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 import csv
+from functools import partial
 from itertools import chain, islice, tee
 import json
 from pathlib import Path
@@ -79,7 +80,11 @@ def run(args, output):
     if start.shape != (3,) or not np.isfinite(start).all():
         raise ValueError('initial pose must contain finite x, y, yaw')
     if args.command == 'map':
-        grid = Grid(args.resolution)
+        grid_factory = Grid
+        if getattr(args, 'grid_dll', None):
+            from .native_grid import NativeGrid, load_dll
+            grid_factory = partial(NativeGrid, dll=load_dll(args.grid_dll))
+        grid = grid_factory(args.resolution)
         endpoints = {}
         def capture_endpoints():
             for scan in stream:
@@ -96,7 +101,7 @@ def run(args, output):
             loop = diagnose(endpoints['first'], endpoints['last'], poses)
             if loop['loop_supported']:
                 poses = adjust(poses, loop['measured_first_from_last'])
-                grid = Grid(args.resolution)
+                grid = grid_factory(args.resolution)
                 for scan, row, pose in zip(scans(args.bag, cfg), estimates, poses, strict=True):
                     row.pose = pose
                     if row.status != 'prediction_only':
@@ -169,6 +174,7 @@ def main():
         if name != 'baseline':
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
         if name == 'map':
+            p.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS native occupancy-grid DLL')
             p.add_argument('--resolution', default=0.08, type=float, help='Grid cell size in metres')
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:

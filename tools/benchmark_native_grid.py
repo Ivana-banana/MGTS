@@ -1,6 +1,5 @@
 """Replay identical scan endpoints through Grid.observe and the experimental C++ DLL."""
 import argparse
-import ctypes
 import json
 from pathlib import Path
 from statistics import median
@@ -10,46 +9,15 @@ import numpy as np
 
 from mgts_nav.bag import load_config, scans
 from mgts_nav.grid import Grid
+from mgts_nav.native_grid import NativeGrid, load_dll
 from mgts_nav.slam import track
 
 
-def load_dll(path):
-    dll = ctypes.CDLL(str(path.resolve()))
-    handle, size = ctypes.c_void_p, ctypes.c_size_t
-    array = np.ctypeslib.ndpointer(np.int32, flags='C_CONTIGUOUS')
-    for name, result, args in (
-        ('grid_create', handle, []), ('grid_destroy', None, [handle]),
-        ('grid_observe', ctypes.c_int, [handle, array, array, size]),
-        ('grid_size', size, [handle]), ('grid_export', ctypes.c_int, [handle, array, size]),
-    ):
-        function = getattr(dll, name)
-        function.restype, function.argtypes = result, args
-    return dll
-
-
-def cells32(points, resolution):
-    cells = np.floor(points / resolution)
-    if not ((cells >= -2**31) & (cells < 2**31)).all():
-        raise ValueError('Cell coordinate outside int32 range')
-    return np.ascontiguousarray(cells, dtype=np.int32)
-
-
 def native_evidence(inputs, resolution, dll):
-    handle = dll.grid_create()
-    if not handle:
-        raise MemoryError('Creating native grid')
-    try:
-        for origin, points in inputs:
-            near = points[np.linalg.norm(points - origin, axis=1) <= 35]
-            cells = np.unique(cells32(near, resolution), axis=0)
-            if dll.grid_observe(handle, cells32(origin, resolution), cells, len(cells)):
-                raise RuntimeError('Updating native grid')
-        rows = np.empty((dll.grid_size(handle), 3), dtype=np.int32)
-        if dll.grid_export(handle, rows, len(rows)):
-            raise RuntimeError('Exporting native grid')
-        return {(x, y): value for x, y, value in rows.tolist()}
-    finally:
-        dll.grid_destroy(handle)
+    grid = NativeGrid(resolution, dll)
+    for origin, points in inputs:
+        grid.observe(origin, points)
+    return grid.evidence()
 
 
 def python_evidence(inputs, resolution):
