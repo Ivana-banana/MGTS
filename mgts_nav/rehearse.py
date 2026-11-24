@@ -22,9 +22,7 @@ def run(output):
         data = stage / 'data'
         generate(data)
         def nav(*args):
-            # Ctrl+C stops only this process; it kills the child, so no child traceback is printed.
-            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True,
-                           start_new_session=True)
+            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
         nav('map', data / 'mapping', '--config', profile, '--out', stage / 'map')
         options = [data / 'inspection', '--config', profile, '--initial-file', data / 'initial_pose.json']
         nav('baseline', *options, '--out', stage / 'baseline')

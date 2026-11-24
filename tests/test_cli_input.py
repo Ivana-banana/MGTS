@@ -121,23 +121,27 @@ def test_auxiliary_clis_report_input_errors(demo, tmp_path, command):
     refused(cli(*[str(a).format(**names) for a in command]))
 
 
-@pytest.mark.parametrize('command, delay', [
-    (['mgts_nav.rehearse', '{out}'], 1.0), (['mgts_nav.rehearse', '{out}'], 2.0),
-    (['mgts_nav.solve', '{mapping}', '{inspection}', '--config', PROFILE, '--out', '{out}'], 1.5),
-    (['mgts_nav', 'map', '{mapping}', '--config', PROFILE, '--out', '{out}'], 1.0),
+@pytest.mark.parametrize('command, delay, group', [
+    (['mgts_nav.rehearse', '{out}'], 1.0, False), (['mgts_nav.rehearse', '{out}'], 2.0, False),
+    (['mgts_nav.solve', '{mapping}', '{inspection}', '--config', PROFILE, '--out', '{out}'], 1.5, True),
+    (['mgts_nav', 'map', '{mapping}', '--config', PROFILE, '--out', '{out}'], 1.0, True),
 ])
 @pytest.mark.skipif(sys.platform == 'win32', reason='needs POSIX process groups to imitate Ctrl+C')
-def test_ctrl_c_prints_one_line_and_leaves_no_output(demo, tmp_path, command, delay):
+def test_ctrl_c_prints_one_line_and_leaves_no_output(demo, tmp_path, command, delay, group):
     import os
     import signal
     import time
     out = tmp_path / 'run'
     names = dict(out=out, mapping=demo / 'mapping', inspection=demo / 'inspection')
-    # Ctrl+C reaches the whole process group, including the child commands.
+    # Ctrl+C reaches the whole process group, including the child commands. rehearse still lets
+    # its children receive it, so there only the parent is signalled (as by `timeout -s INT`).
     proc = subprocess.Popen([sys.executable, '-m', *[str(a).format(**names) for a in command]],
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
     time.sleep(delay)
-    os.killpg(proc.pid, signal.SIGINT)
+    if group:
+        os.killpg(proc.pid, signal.SIGINT)
+    else:
+        proc.send_signal(signal.SIGINT)
     _, err = proc.communicate(timeout=60)
     assert proc.returncode == 130, err
     assert err.strip() == 'Interrupted; no output directory was created'
