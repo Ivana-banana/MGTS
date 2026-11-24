@@ -23,6 +23,25 @@ def corrected(unit='ns'):
     return dict(sensor_profile(), point_time=dict(field='offset', unit=unit))
 
 
+def test_loader_passes_only_the_bracketing_odometry(recordings, monkeypatch):
+    from mgts_nav import bag
+
+    original = bag.deskew_points
+    counts = []
+
+    def observe(xyz, elapsed, t, odom, gap):
+        counts.append(len(odom))
+        lo = t + min(0., elapsed.min())
+        hi = t + max(0., elapsed.max())
+        assert odom[0, 0] <= lo < odom[1, 0]
+        assert odom[-2, 0] < hi <= odom[-1, 0]
+        return original(xyz, elapsed, t, odom, gap)
+
+    monkeypatch.setattr(bag, 'deskew_points', observe)
+    rows = list(scans(recordings / 'ns', corrected()))
+    assert len(rows) == 200 and len(counts) > 190
+
+
 def test_signed_offsets_use_the_declared_units_and_sensor_extrinsics(recordings):
     nano = list(scans(recordings / 'ns', corrected()))
     micro = list(scans(recordings / 'us', corrected('us')))
