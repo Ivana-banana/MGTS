@@ -51,7 +51,7 @@ def static_reference(gyro, acc):
     return bias, gravity / g_norm, g_norm
 
 
-def build_leveler(times, angular_velocity_xyz, acceleration_xyz, stationary_s, max_gap_s):
+def build_leveler(times, angular_velocity_xyz, acceleration_xyz, stationary_s, max_gap_s, *, available=None):
     """Build a complementary gravity filter for an offline ROS IMU sequence.
 
     All readings are in base: rad/s and m/s². stationary_s seconds at the start
@@ -70,10 +70,15 @@ def build_leveler(times, angular_velocity_xyz, acceleration_xyz, stationary_s, m
     dt = np.diff(times)
     if np.any(dt <= 0):
         raise ValueError("IMU times must increase strictly")
-    bounds = np.r_[0, np.flatnonzero(dt > max_gap_s) + 1, len(times)]
+    valid = np.ones(len(times), dtype=bool) if available is None else np.asarray(available, dtype=bool)
+    if valid.shape != times.shape:
+        raise ValueError("Expected one availability flag per IMU sample")
+    bounds = np.r_[0, np.flatnonzero((dt > max_gap_s) | (valid[:-1] != valid[1:])) + 1, len(times)]
     up = np.full((len(times), 3), np.nan)
 
     for start, stop in zip(bounds, bounds[1:]):
+        if not valid[start]:
+            continue
         # Search again after a gap, but never bootstrap the first segment from
         # a later moving interval if the configured stationary start is invalid.
         for i in range(start, stop):
@@ -90,7 +95,7 @@ def build_leveler(times, angular_velocity_xyz, acceleration_xyz, stationary_s, m
         else:
             continue
         if last >= stop:
-            if start == 0:
+            if start == 0 and (stop == len(times) or valid[stop]):
                 raise ValueError("Insufficient continuous stationary IMU coverage")
             continue
 

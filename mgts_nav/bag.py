@@ -195,6 +195,8 @@ def scans(path, cfg):
     with reader(path) as bag:
         conns = connections(bag, cfg)
         motion = {'odom': [], 'imu': []}
+        gyro_available = []
+        tilt_available = []
         for key in motion:
             if not conns[key]:
                 motion[key] = np.empty((0, 4))
@@ -203,11 +205,15 @@ def scans(path, cfg):
                 m = bag.deserialize(raw, conn.msgtype)
                 check_frame(m.header.frame_id, cfg[f'{key}_frame'])
                 if key == 'imu':
+                    has_rate = m.angular_velocity_covariance[0] != -1
+                    gyro_available.append(has_rate)
                     w = m.angular_velocity
-                    value = imu_rot.apply([w.x, w.y, w.z]).tolist()
+                    value = imu_rot.apply([w.x, w.y, w.z]).tolist() if has_rate else [0.] * 3
                     if level_scans:
+                        has_acc = m.linear_acceleration_covariance[0] != -1
+                        tilt_available.append(has_rate and has_acc)
                         acc = m.linear_acceleration
-                        value.extend(imu_rot.apply([acc.x, acc.y, acc.z]))
+                        value.extend(imu_rot.apply([acc.x, acc.y, acc.z]) if has_acc else [0.] * 3)
                 else:
                     check_frame(m.child_frame_id, cfg['base_frame'])
                     p, q = m.pose.pose.position, m.pose.pose.orientation
@@ -221,17 +227,21 @@ def scans(path, cfg):
         odom, gyro = motion['odom'], motion['imu']
         odom[:, 3] = np.unwrap(odom[:, 3])
         gt = gyro[:, 0]
+        gyro_available = np.asarray(gyro_available, dtype=bool)
         bias = np.zeros(3)
         if len(gt) and cfg['stationary_s'] > 0:
             end = gt[0] + cfg['stationary_s']
             if interval_samples(gt, gt[0], end, gap) is None:
                 raise ValueError('Insufficient IMU coverage in configured stationary segment')
-            bias = np.median(gyro[gt <= end, 1:4], axis=0)
+            samples = gyro[(gt <= end) & gyro_available, 1:4]
+            bias = np.median(samples, axis=0) if len(samples) else np.full(3, np.nan)
         rates = gyro[:, 1:4] - bias
+        rates[~gyro_available] = np.nan
         yaw_rate = rates[:, 2]
         leveler = None
         if level_scans:
-            leveler = build_leveler(gt, gyro[:, 1:4], gyro[:, 4:7], cfg['stationary_s'], gap)
+            leveler = build_leveler(gt, gyro[:, 1:4], gyro[:, 4:7], cfg['stationary_s'], gap,
+                                    available=tilt_available)
             # ZYX Euler yaw derivative for a body pitched and rolled relative to gravity.
             up = leveler.up_in_base[:, 1:]
             den = np.sum(up**2, axis=1)

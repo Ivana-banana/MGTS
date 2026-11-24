@@ -79,7 +79,7 @@ def test_scan_fusion_uses_header_clock_handles_wrap_and_sensor_gaps(monkeypatch)
     # +179 and -179 degrees interpolate through pi, not zero.
     odometry = [odom(ms, np.radians(yaw)) for ms, yaw in
                 [(0, 177), (100, 179), (200, -179), (600, -175)]]
-    gyro = [SimpleNamespace(header=header(ms, 'imu'),
+    gyro = [SimpleNamespace(header=header(ms, 'imu'), angular_velocity_covariance=np.zeros(9),
                             angular_velocity=SimpleNamespace(x=0., y=0., z=rate))
             for ms, rate in [(0, .1), (100, .1), (200, 2.1), (600, 2.1)]]
     streams = {'/cloud': ('sensor_msgs/msg/PointCloud2', clouds),
