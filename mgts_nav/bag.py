@@ -122,7 +122,12 @@ def check_frame(actual, expected):
 
 
 def load_config(path):
-    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    try:
+        cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'{path}: invalid JSON in sensor profile: {exc}') from exc
+    except UnicodeDecodeError as exc:
+        raise ValueError(f'{path}: sensor profile must be a UTF-8 JSON file') from exc
     if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
         raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
     names = ['lidar', 'lidar_frame']

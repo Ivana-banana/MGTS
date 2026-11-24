@@ -60,3 +60,31 @@ def localize(demo, tmp_path, *options, map_path=None):
 def test_map_option_names_map_yaml(demo, tmp_path, name, phrase):
     (demo / 'map' / 'bad.yaml').write_text('just text')
     refused(localize(demo, tmp_path, '--initial', 0, 0, 0, map_path=demo / 'map' / name), phrase)
+
+
+@pytest.mark.parametrize('text, phrase', [('{"x": 1, "y": 2, "yaw": 0}', 'must hold a JSON array [x, y, yaw]'),
+                                          ('[1, 2]', 'must hold a JSON array [x, y, yaw]'),
+                                          ('[1, 2, 0,]', 'invalid JSON in --initial-file')])
+def test_initial_file_errors_name_the_file(demo, tmp_path, text, phrase):
+    start = tmp_path / 'start.json'
+    start.write_text(text)
+    refused(localize(demo, tmp_path, '--initial-file', start), str(start), phrase)
+
+
+def broken_profile(tmp_path):
+    profile = tmp_path / 'trailing.json'
+    profile.write_text(PROFILE.read_text().rstrip().rstrip('}').rstrip() + ',\n}\n')
+    return profile
+
+
+def test_profile_json_error_names_the_file(demo, tmp_path):
+    profile = broken_profile(tmp_path)
+    run = cli('mgts_nav', 'map', demo / 'mapping', '--config', profile, '--out', tmp_path / 'out')
+    refused(run, f'{profile}: invalid JSON in sensor profile')
+
+
+def test_solve_names_the_broken_inspection_profile(demo, tmp_path):
+    profile = broken_profile(tmp_path)
+    run = cli('mgts_nav.solve', demo / 'mapping', demo / 'inspection', '--config', PROFILE,
+              '--inspection-config', profile, '--out', tmp_path / 'out')
+    refused(run, f'{profile}: invalid JSON in sensor profile')

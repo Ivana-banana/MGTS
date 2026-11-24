@@ -38,7 +38,16 @@ def initial_pose(args):
     if args.initial is not None:
         return np.array(args.initial)
     if args.initial_file is not None:
-        return np.array(json.loads(args.initial_file.read_text(encoding='utf-8-sig')), dtype=float)
+        path = args.initial_file
+        try:
+            value = json.loads(path.read_text(encoding='utf-8-sig'))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'{path}: invalid JSON in --initial-file: {exc}') from exc
+        if not isinstance(value, list) or len(value) != 3 or not all(
+                type(v) in (int, float) for v in value):
+            raise ValueError(f'{path}: --initial-file must hold a JSON array [x, y, yaw] '
+                             '(metres and radians in the map frame)')
+        return np.array(value, dtype=float)
     return None
 
 

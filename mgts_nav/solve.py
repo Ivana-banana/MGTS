@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
-from .bag import check_recording
+from .bag import check_recording, load_config
 from .metrics import read_csv
 from .ros_export import export
 
@@ -48,6 +48,10 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False):
     if initial is not None and confirm_start:
         raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
+    # Validate the user's files first, so that errors name them and not the staged copies.
+    load_config(profile)
+    if inspection_profile is not None:
+        load_config(inspection_profile)
     output = Path(output)
     if output.exists():
         raise FileExistsError(f'Choose a new output directory: {output}')
