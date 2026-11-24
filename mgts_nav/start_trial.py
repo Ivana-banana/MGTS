@@ -23,23 +23,17 @@ def baseline(window, pixels, meta, stats):
     free = 1 - np.flipud(pixels).astype(float)/255 < meta["free_thresh"]
     tile_count = len(np.unique(np.argwhere(free)//stride, axis=0))
     stats.update(coarse=0, icp=0, powell=0)
-    original = initialization.estimate_initial
-
-    def counted(xy, image, metadata):
-        stats["coarse"] += 72 * tile_count
-        return original(xy, image, metadata)
-
     with patch.object(initialization, "match", wraps=initialization.match) as icp, \
          patch.object(initialization, "minimize", wraps=initialization.minimize) as opt, \
-         patch.object(multiscan, "estimate_initial", counted):
+         patch.object(initialization, "rotation", wraps=initialization.rotation) as yaw_sweeps:
         try:
             try:
-                return counted(window[0].xy, pixels, meta)
+                return initialization.estimate_initial(window[0].xy, pixels, meta)
             except ValueError as exc:
                 stats["single_refusal"] = str(exc)
                 return multiscan.estimate_multiscan(window[:multiscan.MAX_SCANS], pixels, meta)
         finally:
-            stats.update(icp=icp.call_count, powell=opt.call_count)
+            stats.update(coarse=tile_count*yaw_sweeps.call_count, icp=icp.call_count, powell=opt.call_count)
 
 
 def compare(bag, config, map_path, reference):
