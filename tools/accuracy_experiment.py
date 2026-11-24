@@ -24,6 +24,7 @@ from mgts_nav.demo import PROFILE, generate  # noqa: E402
 from mgts_nav.grid import Grid, read_map  # noqa: E402
 from mgts_nav.initialization import estimate_initial  # noqa: E402
 from mgts_nav.metrics import Pose, evaluate, read_csv, wrap  # noqa: E402
+from mgts_nav import slam  # noqa: E402
 from mgts_nav.slam import track  # noqa: E402
 from mgts_nav.stress import CASES, fault_bag  # noqa: E402
 
@@ -170,11 +171,15 @@ def main():
     parser.add_argument("--layout", choices=SEEDS, action="append")
     parser.add_argument("--compare", type=Path, nargs=2, metavar=("BEFORE", "AFTER"),
                         help="Print a before/after table for two results.json files")
+    parser.add_argument("--cell-centres", action="store_true",
+                        help="Match against raw cell centres, as before the wall-surface change")
     args = parser.parse_args()
     if args.compare:
         before, after = (json.loads(p.read_text(encoding="utf-8")) for p in args.compare)
         print(compare(before, after))
         return
+    if args.cell_centres:
+        slam.surface_points = lambda points: np.asarray(points, dtype=float)
     data = args.data or args.out / "data"
     rows = run(args.out, data, args.layout or list(SEEDS))
     print(table(rows))
