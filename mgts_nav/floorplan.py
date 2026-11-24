@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -21,28 +22,47 @@ class AlignmentError(ValueError):
     pass
 
 
+def _no_duplicates(pairs):
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise AlignmentError(f'Name {key!r} is given twice; each control point needs its own name')
+        seen[key] = value
+    return seen
+
+
 def load(path):
     path = Path(path)
-    spec = json.loads(path.read_text(encoding='utf-8'))
+    # utf-8-sig: PowerShell 5.1 and old Notepad save UTF-8 with a BOM.
+    spec = json.loads(path.read_text(encoding='utf-8-sig'), object_pairs_hook=_no_duplicates)
     spec['_base'] = path.parent
     return spec
 
 
+def _upm(plan):
+    upm = plan.get('units_per_meter')
+    if upm is None:
+        return None
+    if not (isinstance(upm, (int, float)) and np.isfinite(upm) and upm > 0):
+        raise AlignmentError(f'plan.units_per_meter must be a positive number, got {upm!r}')
+    return float(upm)
+
+
 def plan_to_metric(points, plan):
-    """Plan units -> right-handed plan frame in plan units scaled by units_per_meter."""
+    """Plan units -> right-handed plan frame (metres when units_per_meter is given)."""
     points = np.asarray(points, dtype=float).reshape(-1, 2).copy()
     axis = plan.get('y_axis')
     if axis not in ('up', 'down'):
         raise AlignmentError('plan.y_axis must be "up" or "down" (pixel images: "down")')
     if axis == 'down':
         points[:, 1] *= -1
-    upm = plan.get('units_per_meter')
+    upm = _upm(plan)
     return points / upm if upm else points
 
 
 def metric_to_plan(points, plan):
     points = np.asarray(points, dtype=float).reshape(-1, 2).copy()
-    upm = plan.get('units_per_meter')
+    upm = _upm(plan)
     if upm:
         points = points * upm
     if plan['y_axis'] == 'down':
@@ -50,13 +70,13 @@ def metric_to_plan(points, plan):
     return points
 
 
-def umeyama(src, dst, scale, reflect=False):
-    """dst ~ s R src + t; returns s, R, t."""
+def umeyama(src, dst, scale):
+    """Proper (no reflection) least squares fit dst ~ s R src + t; returns s, R, t."""
     mu_s, mu_d = src.mean(0), dst.mean(0)
     a, b = src - mu_s, dst - mu_d
     u, sing, vt = np.linalg.svd(b.T @ a / len(src))
     d = np.eye(2)
-    if not reflect and np.linalg.det(u @ vt) < 0:
+    if np.linalg.det(u @ vt) < 0:
         d[1, 1] = -1
     rot = u @ d @ vt
     var = (a ** 2).sum() / len(src)
@@ -92,13 +112,40 @@ def geometry(xy, tolerance):
                 collinear=bool(len(sing) < 2 or sing[1] < tolerance))
 
 
+def consensus(src, dst, scale, limit, tolerance):
+    """Largest set of fit points that one transform from a pair of them explains within limit.
+
+    Tried for the proper and the mirrored orientation. A wrong y_axis makes the mirrored
+    set larger; one or two mistyped or swapped points stay outside the proper set.
+    """
+    flip = np.array([1.0, -1.0])
+    best = {}
+    for name, target in (('proper', dst), ('mirrored', dst * flip)):
+        top = (0, np.inf, ())
+        for i in range(len(src)):
+            for j in range(i + 1, len(src)):
+                if np.linalg.norm(src[i] - src[j]) < 2 * tolerance:
+                    continue
+                params = umeyama(src[[i, j]], target[[i, j]], scale)
+                if not params[0] > 0:
+                    continue
+                err = np.linalg.norm(apply(params, src) - target, axis=1) / params[0]
+                inliers = tuple(np.flatnonzero(err < limit))
+                key = (len(inliers), -float(np.sum(err[list(inliers)])))
+                if key > (top[0], -top[1]):
+                    top = (len(inliers), float(np.sum(err[list(inliers)])), inliers)
+        best[name] = top[2]
+    return best
+
+
 def align(spec, tolerance=0.05, outlier_m=None):
     """Fit and diagnostics. tolerance is the expected point picking error in metres."""
     mode = spec.get('mode', 'rigid')
     if mode not in MODES:
         raise AlignmentError(f'mode must be one of {MODES}')
     plan = spec['plan']
-    if mode == 'rigid' and not plan.get('units_per_meter'):
+    upm = _upm(plan)
+    if mode == 'rigid' and upm is None:
         raise AlignmentError('rigid mode needs plan.units_per_meter; otherwise choose "similarity"')
     fit, check = _pairs(spec)
     if len(fit) < 2:
@@ -107,40 +154,41 @@ def align(spec, tolerance=0.05, outlier_m=None):
     dst = plan_to_metric([spec['plan_points'][n] for n in fit], plan)
     shape = geometry(src, tolerance)
     if shape['spread_m'] < 2 * tolerance:
-        raise AlignmentError(f'Degenerate fit points: spread {shape["spread_m"]:.3f} m is within '
+        raise AlignmentError(f'Degenerate fit points: spread {shape["spread_m"]:.3f} m on the map is within '
                              f'the picking tolerance {tolerance} m')
-    params = umeyama(src, dst, scale=mode == 'similarity')
-    if params[0] <= 0 or not np.isfinite(params[0]):
-        raise AlignmentError('Fitted scale is not positive')
-    residual = np.linalg.norm(apply(params, src) - dst, axis=1)
-    # Residuals in plan-metric units; divide by scale to express them on the map in metres.
-    to_m = 1.0 / params[0]
-    warnings = []
+    plan_sing = np.linalg.svd(dst - dst.mean(0), compute_uv=False)
+    if not plan_sing[0] > 1e-9 * max(1.0, float(np.abs(dst).max())):
+        raise AlignmentError('All fit points coincide on the plan; check plan_points')
+    scale = mode == 'similarity'
+    limit = outlier_m if outlier_m is not None else 4 * tolerance
+    warnings, suspects = [], []
+    majority = len(fit) // 2 + 1
     if len(fit) == 2:
         warnings.append('Two fit points determine the transform exactly; residuals are zero by construction.')
     if shape['collinear']:
-        warnings.append('Fit points are collinear: a mirrored plan axis cannot be detected.')
-    else:
-        mirrored = umeyama(src, dst, scale=mode == 'similarity', reflect=True)
-        if np.linalg.det(mirrored[1]) < 0:
-            mres = np.linalg.norm(apply(mirrored, src) - dst, axis=1)
-            if np.sqrt((mres ** 2).mean()) < 0.5 * np.sqrt((residual ** 2).mean()) and \
-                    np.sqrt((residual ** 2).mean()) * to_m > tolerance:
-                raise AlignmentError('A mirrored transform fits much better: check plan.y_axis')
-
-    leave_one_out = {}
-    if len(fit) >= 3 and not shape['collinear']:
-        for i, name in enumerate(fit):
-            keep = np.arange(len(fit)) != i
-            if geometry(src[keep], tolerance)['spread_m'] < 2 * tolerance:
-                continue
-            p = umeyama(src[keep], dst[keep], scale=mode == 'similarity')
-            leave_one_out[name] = float(np.linalg.norm(apply(p, src[i:i+1]) - dst[i]) / p[0])
-    limit = outlier_m if outlier_m is not None else 4 * tolerance
-    suspects = sorted((n for n, e in leave_one_out.items() if e > limit), key=lambda n: -leave_one_out[n])
-    if suspects:
-        warnings.append(f'Points {suspects} disagree with the others by more than {limit:.3g} m '
-                        'when left out; check their names and coordinates.')
+        warnings.append('Fit points are collinear on the map: a mirrored plan axis cannot be detected.')
+    elif len(plan_sing) > 1 and plan_sing[1] / plan_sing[0] < 0.25 * shape['width_m'] / shape['spread_m']:
+        warnings.append('Fit points are collinear on the plan but not on the map: check the correspondences.')
+    if len(fit) >= 3:
+        found = consensus(src, dst, scale, limit, tolerance)
+        proper, mirrored = found['proper'], found['mirrored']
+        if not shape['collinear'] and len(mirrored) > len(proper) and len(mirrored) >= max(3, majority):
+            raise AlignmentError(f'A mirrored transform explains {len(mirrored)} of {len(fit)} fit points, '
+                                 f'the proper one only {len(proper)}: check plan.y_axis')
+        if len(proper) >= max(3, majority) or (len(fit) == 3 and len(proper) == 3):
+            suspects = [fit[i] for i in range(len(fit)) if i not in proper]
+            if suspects:
+                warnings.append(f'Points {suspects} disagree by more than {limit:.3g} m with the transform '
+                                f'that the other {len(proper)} fit points share; check their names and '
+                                'coordinates. They are still used in the fit.')
+        else:
+            warnings.append(f'No majority of fit points agrees within {limit:.3g} m (largest consistent '
+                            f'set: {[fit[i] for i in proper]}); check names, swapped points and units.')
+    params = umeyama(src, dst, scale)
+    if not (params[0] > 0 and np.isfinite(params[0])):
+        raise AlignmentError('Fitted scale is not positive: the points do not correspond; '
+                             'look for swapped or mistyped points. ' + ' '.join(warnings))
+    to_m = 1.0 / params[0]  # residuals in plan-frame units -> metres on the map
 
     rows = []
     for role, names in (('fit', fit), ('check', check)):
@@ -150,29 +198,31 @@ def align(spec, tolerance=0.05, outlier_m=None):
             predicted = metric_to_plan(apply(params, m[None]), plan)[0]
             err = float(np.linalg.norm(apply(params, m[None])[0] - plan_to_metric(observed, plan)[0]) * to_m)
             rows.append(dict(name=name, role=role, map=m.tolist(), plan=observed.tolist(),
-                             predicted_plan=predicted.tolist(), error_m=err,
-                             leave_one_out_m=leave_one_out.get(name)))
+                             predicted_plan=predicted.tolist(), error_m=err))
+    check_outliers = [r['name'] for r in rows if r['role'] == 'check' and r['error_m'] > limit]
+    if check_outliers:
+        warnings.append(f'Check points {check_outliers} miss the fitted transform by more than {limit:.3g} m.')
 
     def rms(role):
         errors = [r['error_m'] for r in rows if r['role'] == role]
         return float(np.sqrt(np.mean(np.square(errors)))) if errors else None
 
     s, rot, t = params
-    upm = plan.get('units_per_meter')
     return dict(
-        mode=mode, fit_points=len(fit), check_points=len(check),
+        mode=mode, fit_points=len(fit), check_points=len(check), outlier_limit_m=limit,
         rotation_deg=float(np.degrees(np.arctan2(rot[1, 0], rot[0, 0]))),
-        scale=float(s) if mode == 'similarity' else 1.0,
-        plan_units_per_map_meter=float(s * (upm or 1.0)) if mode == 'similarity' else float(upm),
+        scale=float(s) if scale else 1.0,
+        plan_units_per_map_meter=float(s * (upm or 1.0)) if scale else upm,
         translation=t.tolist(),
-        translation_units='metres of the plan frame' if upm else 'plan units, Y up',
+        translation_units='metres of the plan frame, Y up' if upm else 'plan units, Y up',
         fit_rms_m=rms('fit'), check_rms_m=rms('check'),
         check_max_m=max((r['error_m'] for r in rows if r['role'] == 'check'), default=None),
-        geometry=shape, warnings=warnings, suspects=suspects, points=rows, _params=params)
+        geometry=shape, warnings=warnings, suspects=suspects, check_outliers=check_outliers,
+        points=rows, _params=params)
 
 
 def read_route(path):
-    with Path(path).open(newline='', encoding='utf-8') as f:
+    with Path(path).open(newline='', encoding='utf-8-sig') as f:
         return np.array([[float(r['x']), float(r['y'])] for r in csv.DictReader(f)])
 
 
@@ -183,8 +233,8 @@ def overlay(spec, report, output, route=None):
     with Image.open(image_path) as src:
         image = src.convert('RGB')
     draw = ImageDraw.Draw(image)
-    if plan['y_axis'] != 'down':
-        raise AlignmentError('Overlay needs a pixel plan with y_axis "down"')
+    if plan['y_axis'] != 'down' or plan.get('units', 'px') != 'px':
+        raise AlignmentError('Overlay needs plan_points in pixels of the image: units "px", y_axis "down"')
     params = report['_params']
     if route is not None and len(route):
         uv = metric_to_plan(apply(params, route), plan)
@@ -216,7 +266,9 @@ def synthetic(output, rotation_deg=17.0, pixels_per_meter=48.0, margin_px=70,
     from .demo import WALLS, pose_at
 
     output = Path(output)
-    output.mkdir(parents=True, exist_ok=False)
+    if output.exists():
+        raise FileExistsError(f'Choose a new output directory: {output}')
+    output.mkdir(parents=True)
     rng = np.random.default_rng(seed)
     a = np.radians(rotation_deg)
     rot = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
@@ -279,9 +331,12 @@ def main():
         out.mkdir(parents=True, exist_ok=True)
         text = json.dumps(public(report), indent=2, ensure_ascii=False)
         (out / 'alignment.json').write_text(text, encoding='utf-8')
-        if spec['plan'].get('image'):
-            overlay(spec, report, out / 'overlay.png', read_route(args.route) if args.route else None)
         print(text)
+        plan = spec['plan']
+        if plan.get('image') and plan.get('units', 'px') == 'px' and plan['y_axis'] == 'down':
+            overlay(spec, report, out / 'overlay.png', read_route(args.route) if args.route else None)
+        elif plan.get('image'):
+            print('overlay.png skipped: plan_points are not pixels of the image', file=sys.stderr)
     except (OSError, ValueError, KeyError) as error:
         parser.exit(2, f'{error}\n')
 

@@ -68,8 +68,43 @@ def test_name_typo_and_swapped_points_are_reported():
     p = spec['plan_points']
     p['b'], p['c'] = p['c'], p['b']  # labels of two neighbouring corners swapped
     report = align(spec)
-    assert set(report['suspects']) & {'b', 'c'}
+    assert sorted(report['suspects']) == ['b', 'c']
     assert any('disagree' in w for w in report['warnings'])
+
+
+def test_swapped_diagonal_points_are_not_taken_for_a_mirrored_axis(tmp_path):
+    spec = floorplan.load(floorplan.synthetic(tmp_path / 'fp') / 'points.json')
+    p = spec['plan_points']
+    p['NW'], p['SE'] = p['SE'], p['NW']
+    report = align(spec)
+    assert sorted(report['suspects']) == ['NW', 'SE']
+    assert not any('y_axis' in w for w in report['warnings'])
+
+
+def test_mistakes_among_check_points_are_reported():
+    spec = make_spec(SQUARE, check=['f', 'g'])
+    p = spec['plan_points']
+    p['f'], p['g'] = p['g'], p['f']
+    report = align(spec)
+    assert report['check_outliers'] == ['f', 'g'] and report['suspects'] == []
+
+
+def test_input_file_errors(tmp_path):
+    spec = make_spec(SQUARE)
+    text = json.dumps({k: v for k, v in spec.items()})
+    path = tmp_path / 'bom.json'
+    path.write_bytes(text.encode('utf-8-sig'))
+    assert floorplan.load(path)['mode'] == 'similarity'
+    path.write_text('{"map_points": {"a": [0, 0], "a": [1, 1]}}', encoding='utf-8')
+    with pytest.raises(AlignmentError, match='twice'):
+        floorplan.load(path)
+    spec['plan']['units_per_meter'] = -20
+    with pytest.raises(AlignmentError, match='positive'):
+        align(spec)
+    spec = make_spec(SQUARE)
+    spec['plan_points'] = {n: [10.0, 10.0] for n in spec['plan_points']}
+    with pytest.raises(AlignmentError, match='coincide on the plan'):
+        align(spec)
 
 
 def test_wrong_y_axis_is_detected():
@@ -87,5 +122,9 @@ def test_synthetic_command_writes_overlay(tmp_path):
     assert report['rotation_deg'] == pytest.approx(truth['rotation_deg'], abs=0.5)
     assert report['plan_units_per_map_meter'] == pytest.approx(truth['pixels_per_meter'], rel=0.01)
     assert report['check_max_m'] < 0.1
+    assert report['translation'] == pytest.approx(truth['expected_translation_plan_units_y_up'], abs=2.0)
+    assert report['suspects'] == [] and report['warnings'] == []
+    with pytest.raises(FileExistsError, match='new output'):
+        floorplan.synthetic(out)
     floorplan.overlay(spec, report, out / 'overlay.png', floorplan.read_route(out / 'route.csv'))
     assert (out / 'overlay.png').stat().st_size > 0
