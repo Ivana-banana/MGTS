@@ -236,6 +236,8 @@ def main():
         parser.exit(3, f'{error}\n')
     except (OSError, KeyError, ValueError) as error:
         parser.exit(2, f'{error}\n')
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted; no output directory was created\n')
 
 
 if __name__ == '__main__':

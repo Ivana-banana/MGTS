@@ -22,7 +22,9 @@ def run(output):
         data = stage / 'data'
         generate(data)
         def nav(*args):
-            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
+            # Ctrl+C stops only this process; it kills the child, so no child traceback is printed.
+            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True,
+                           start_new_session=True)
         nav('map', data / 'mapping', '--config', profile, '--out', stage / 'map')
         options = [data / 'inspection', '--config', profile, '--initial-file', data / 'initial_pose.json']
         nav('baseline', *options, '--out', stage / 'baseline')
@@ -46,3 +48,5 @@ if __name__ == '__main__':
         run(parser.parse_args().out)
     except (OSError, ValueError) as error:
         parser.exit(2, f'{error}\n')
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted; no output directory was created\n')

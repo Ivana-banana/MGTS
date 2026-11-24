@@ -69,7 +69,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         check_recording(mapping, profiles / 'mapping.json')
         cfg = check_recording(inspection, profiles / 'inspection.json')
         def invoke(*args):
-            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
+            # Ctrl+C stops only this process; it kills the child, so no child traceback is printed.
+            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True,
+                           start_new_session=True)
         map_flags = ['--close-loop'] if close_loop else []
         if mapping_visual_pairs:
             map_flags.extend(['--visual-pairs', mapping_visual_pairs])
@@ -95,7 +97,7 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             baseline = subprocess.run([sys.executable, '-m', 'mgts_nav', 'baseline', str(inspection),
                                        '--config', str(profiles / 'inspection.json'), '--initial',
                                        *map(str, summary['initial_pose']), '--out', str(stage / 'baseline')],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, start_new_session=True)
             if baseline.returncode:
                 # The two main products remain usable when the comparison lacks an anchor.
                 if baseline.returncode != 3:
@@ -104,7 +106,7 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             dense = result / 'continuous.csv'
             continuous = subprocess.run([sys.executable, '-m', 'mgts_nav.continuous', str(inspection),
                                          str(route), str(dense), '--config', str(profiles / 'inspection.json')],
-                                        capture_output=True, text=True)
+                                        capture_output=True, text=True, start_new_session=True)
             if continuous.returncode:
                 raise ValueError(continuous.stderr.strip() or 'Continuous trajectory failed')
             (result / 'continuous-summary.json').write_text(continuous.stdout, encoding='utf-8')
@@ -136,3 +138,5 @@ if __name__ == '__main__':
               args.recover, args.confirm_start)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted; no output directory was created\n')

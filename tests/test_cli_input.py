@@ -119,3 +119,26 @@ def test_auxiliary_clis_report_input_errors(demo, tmp_path, command):
     text.write_text('t,x,y,yaw\na,b,c,d\n')
     names = dict(mapping=demo / 'mapping', missing=tmp_path / 'missing.csv', text=text)
     refused(cli(*[str(a).format(**names) for a in command]))
+
+
+@pytest.mark.parametrize('command, delay', [
+    (['mgts_nav.rehearse', '{out}'], 1.0), (['mgts_nav.rehearse', '{out}'], 2.0),
+    (['mgts_nav.solve', '{mapping}', '{inspection}', '--config', PROFILE, '--out', '{out}'], 1.5),
+    (['mgts_nav', 'map', '{mapping}', '--config', PROFILE, '--out', '{out}'], 1.0),
+])
+@pytest.mark.skipif(sys.platform == 'win32', reason='needs POSIX process groups to imitate Ctrl+C')
+def test_ctrl_c_prints_one_line_and_leaves_no_output(demo, tmp_path, command, delay):
+    import os
+    import signal
+    import time
+    out = tmp_path / 'run'
+    names = dict(out=out, mapping=demo / 'mapping', inspection=demo / 'inspection')
+    # Ctrl+C reaches the whole process group, including the child commands.
+    proc = subprocess.Popen([sys.executable, '-m', *[str(a).format(**names) for a in command]],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    time.sleep(delay)
+    os.killpg(proc.pid, signal.SIGINT)
+    _, err = proc.communicate(timeout=60)
+    assert proc.returncode == 130, err
+    assert err.strip() == 'Interrupted; no output directory was created'
+    assert sorted(p.name for p in tmp_path.iterdir()) == []
