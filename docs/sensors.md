@@ -41,6 +41,8 @@ ros2 bag play out/official-01/rviz
 
 ## Воспроизвести испытания
 
+Для сравнения режимов с камерой и без неё доступны [эксперимент на двух записях, метрики и условия отказа](camera-experiment.md).
+
 ```sh
 python -m mgts_nav.stress out/rehearsal-01/data --map out/rehearsal-01/map/map.yaml
 python -m mgts_nav.map_eval out/rehearsal-01/map/map.yaml

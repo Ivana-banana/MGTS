@@ -20,6 +20,7 @@ FILES = tuple(sorted((
     'README.md', 'requirements.txt', 'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
     'docs/ambiguity.md', 'docs/corridor.md', 'docs/demo-results.md', 'docs/demo-results.png',
     'tools/plot_quality.py', 'docs/quality-clean.png', 'docs/quality-gap.png',
+    'tools/evaluate_camera.py', 'docs/camera-experiment.md',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',
     'docs/sensors.md', 'docs/start-confirmation.md', 'docs/zones.md', 'docs/demo-zone-visits.csv',
     *(f'mgts_nav/{name}.py' for name in MODULES),
