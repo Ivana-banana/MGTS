@@ -69,7 +69,8 @@ def experiment(output, seeds):
                 write_camera_pairs(path, seed+2, sample, WALLS, epoch_ns, noise_px=sigma)
                 # Retain exactly the four visual pairs for each of the 19 scored intervals.
                 selected = root / f'window-{sigma}.jsonl'
-                with path.open() as src, selected.open('x') as dst:
+                with path.open(encoding='utf-8', newline='') as src, \
+                        selected.open('x', encoding='utf-8', newline='') as dst:
                     for line in src:
                         pair = json.loads(line)
                         if on[0].t <= pair['t0'] and pair['t1'] <= on[-1].t:

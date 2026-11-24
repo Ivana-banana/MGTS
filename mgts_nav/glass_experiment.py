@@ -114,7 +114,7 @@ def experiment(root):
         control = directory/"control"
         generate(control, seed=seed)
         truth = read_csv(control/"inspection_truth.csv")
-        initial = np.array(json.loads((control/"initial_pose.json").read_text()))
+        initial = np.array(json.loads((control/"initial_pose.json").read_text(encoding="utf-8")))
         inspection_glass = directory/"inspection-glass"
         variant(control/"inspection", inspection_glass, "inspection", cfg, seed+1, True, False)
         for name, glass, person in (("control", False, False), ("glass", True, False),
