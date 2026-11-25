@@ -26,7 +26,7 @@ def _scores(field, seeds, offsets):
     return (field[y.clip(0, h-1), x.clip(0, w-1)] * valid).mean(axis=1)
 
 
-def estimate(scan, pixels, meta, stats):
+def estimate(scan, pixels, meta, stats, *, candidates=None):
     """Return pose in map coordinates or raise with partial search diagnostics."""
     deadline = perf_counter() + TIME_LIMIT_S
     stats.update(coarse=0, fine=0, icp=0)
@@ -129,6 +129,12 @@ def estimate(scan, pixels, meta, stats):
     modes.sort(key=lambda item: -item[0])
     if not modes:
         raise ValueError("No supported refinement")
+    if candidates is not None:
+        for _, pose in modes:
+            if all(not _same_pose(pose, other, .45, np.deg2rad(12)) for other in candidates):
+                candidates.append(pose.copy())
+                if len(candidates) == 8:
+                    break
     score, best = modes[0]
     stats["best_score"] = score
     stats["best_refined_pose"] = best.tolist()
