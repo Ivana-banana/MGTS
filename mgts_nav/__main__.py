@@ -175,6 +175,7 @@ def run(args, output):
     if args.command == 'localize':
         from .quality import inspection_quality
         summary['quality'] = inspection_quality(estimates)
+        summary['map_points'] = 'wall_surface' if args.wall_surface else 'cell_centres'
     if visual_stats:
         summary['visual_yaw'] = visual_stats
     if recovery is not None:

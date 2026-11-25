@@ -1,4 +1,8 @@
-"""Replay PR 43's map-point change on held-out Velodyne scans with known starts."""
+"""Replay PR 43's map-point changes on held-out Velodyne scans with known starts.
+
+Modes: ``centres`` (main), ``surface`` (first PR version, 3x3 mean of all map
+points) and ``projection`` (``track(surface=True)``, the gated wall projection).
+"""
 import argparse
 from dataclasses import replace
 import json
@@ -39,13 +43,14 @@ def compare_window(window, truth, points):
         raise ValueError('Expected 60 paired timestamps per window')
     window[0] = replace(window[0], gyro_delta=None)
     initial = np.array(truth[0][1:])
-    times = {'centres': [], 'surface': []}
+    modes = ('centres', 'surface', 'projection')
+    times = {mode: [] for mode in modes}
     result = {}
     for i in range(3):
-        for mode in (('centres', 'surface') if i % 2 == 0 else ('surface', 'centres')):
+        for mode in (modes if i % 2 == 0 else modes[::-1]):
             tick = perf_counter()
             target = surface_points(points) if mode == 'surface' else points
-            rows = list(track(window, initial, map_points=target))
+            rows = list(track(window, initial, map_points=target, surface=mode == 'projection'))
             times[mode].append(perf_counter()-tick)
             metrics = evaluate([Pose(r.t, *r.pose) for r in rows], truth)
             residual = np.array([r.pose[:2] for r in rows]) - np.array([r[1:3] for r in truth])
