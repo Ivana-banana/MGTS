@@ -1,6 +1,7 @@
 """Find the first divergent Intel Lab scan and replay its ICP with a fixed history."""
 import argparse
 import csv
+from dataclasses import replace
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +10,7 @@ import numpy as np
 
 from mgts_nav import slam
 from mgts_nav.bag import cloud_xyz, load_config, reader, scans
+from mgts_nav.metrics import Pose, evaluate, read_csv
 
 
 class TrajectoryOnly:
@@ -132,11 +134,53 @@ def experiment(data, comparison):
     return report
 
 
+def boundary_trial(data, comparison):
+    """Keep measured coordinates unchanged and snap only the voxel index calculation."""
+    cfg = load_config(data/'profile.json')
+    paths = (data/'mapping', comparison/'mapping')
+    streams = [list(scans(path, cfg)) for path in paths]
+    clouds = [raw_scans(path, range(len(rows))) for path, rows in zip(paths, streams)]
+    reference = read_csv(data/'mapping-external.csv')
+    results = []
+    for micrometres in (0, 1, 3, 10):
+        trajectories, labels, indices, external = [], [], [], []
+        for rows, raw, case in zip(streams, clouds, ('direct', 'converted')):
+            trial, selected = [], []
+            for i, row in enumerate(rows):
+                xy = raw[i]
+                key = xy / .06
+                if micrometres:
+                    nearest = np.rint(key)
+                    key = np.where(np.abs(key-nearest) <= micrometres*1e-6/.06, nearest, key)
+                _, ids = np.unique(np.floor(key), axis=0, return_index=True)
+                if micrometres == 0:
+                    np.testing.assert_array_equal(xy[ids], row.xy)
+                trial.append(replace(row, xy=xy[ids]))
+                selected.append(ids)
+            poses, status, _ = replay(trial, ())
+            if micrometres == 0:
+                original = read_csv(comparison/case/'map/trajectory.csv')
+                np.testing.assert_array_equal(poses, [p[1:] for p in original])
+            external.append(evaluate([Pose(row.t, *p) for row, p in zip(rows, poses)], reference)['ate_xy_rmse_m'])
+            trajectories.append(poses)
+            labels.append(status)
+            indices.append(selected)
+        delta = np.linalg.norm((trajectories[0]-trajectories[1])[:, :2], axis=1)
+        above_cm = np.flatnonzero(delta > .01)
+        results.append(dict(tolerance_um=micrometres,
+                            differing_selections=sum(not np.array_equal(a, b) for a, b in zip(*indices, strict=True)),
+                            first_above_cm=int(above_cm[0]) if above_cm.size else None,
+                            rms_m=float(np.sqrt(np.mean(delta**2))), max_m=float(delta.max()),
+                            status_changes=int(np.sum(labels[0] != labels[1])), rbpf_rms_m=external))
+    return results
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('data', 'comparison', 'output'):
         parser.add_argument(name, type=Path)
+    parser.add_argument('--boundary-trial', action='store_true')
     args = parser.parse_args()
-    result = experiment(args.data, args.comparison)
+    result = (boundary_trial if args.boundary_trial else experiment)(args.data, args.comparison)
     with args.output.open('x', encoding='utf-8') as stream:
         json.dump(result, stream, indent=2, allow_nan=False)
