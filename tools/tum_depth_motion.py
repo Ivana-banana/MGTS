@@ -66,7 +66,18 @@ def load_images(path):
             (line.split() for line in path.read_text().splitlines() if line.strip() and not line.startswith('#'))]
 
 
-def run(data):
+def dense_pairs(pairs, images, coords):
+    clouds = [[], []]
+    for _, u0, v0, u1, v1 in pairs:
+        a = unproject((u0, v0), images[0], coords)
+        b = unproject((u1, v1), images[1], coords)
+        if a is not None and b is not None:
+            clouds[0].append(a)
+            clouds[1].append(b)
+    return clouds
+
+
+def run(data, pair_builder=dense_pairs):
     rgb, depths = (load_images(data / f'{kind}.txt') for kind in ('rgb', 'depth'))
     depth_times = np.array([t for t, _ in depths])
     coords, valid = rectification()
@@ -83,18 +94,12 @@ def run(data):
             if any(abs(depth_times[j]-t) > .02 for j,t in zip(ids, (t0,t1))):
                 row['reason'] = 'depth_gap'
                 continue
-            clouds = [[], []]
             images = []
             for j in ids:
                 with Image.open(data/depths[j][1]) as image:
                     images.append(np.asarray(image))
             pairs = tracks(frame(data/rgb[i][1], coords, valid), frame(data/rgb[i+gap][1], coords, valid))
-            for _, u0, v0, u1, v1 in pairs:
-                a = unproject((u0, v0), images[0], coords)
-                b = unproject((u1, v1), images[1], coords)
-                if a is not None and b is not None:
-                    clouds[0].append(a)
-                    clouds[1].append(b)
+            clouds = pair_builder(pairs, images, coords)
             row['depth_tracks'] = len(clouds[0])
             # Body motion T0^-1 T1 maps static points from the second frame into the first.
             result = estimate(np.asarray(clouds[1]), np.asarray(clouds[0]))

@@ -33,7 +33,7 @@ TESTS = (
     'ros_export', 'route_preview', 'scan_pair_overlap', 'scan_rejections', 'self_check', 'solve', 'solve_audit',
     'solve_manifest', 'solve_zones', 'split_bags', 'start_confirmation', 'start_search_cli', 'stress',
     'submap_controls', 'sync', 'sync_imu', 'turn_recovery', 'unicode_volume', 'velocity_prior', 'vision',
-    'tum_depth_motion', 'visit_agreement', 'visual_fusion', 'zones',
+    'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
     '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'pytest.ini',
@@ -84,7 +84,7 @@ FILES = tuple(sorted((
     'tools/native_grid.cpp', 'tools/package_solution.py', 'tools/plot_heap1_drift.py',
     'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
     'tools/obstacle_pose_controls.py', 'tools/post_gap_controls.py', 'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
-    'tools/tum_depth_motion.py', 'tools/tum_speed_bounds.py', 'tools/tum_visual_yaw.py',
+    'tools/tum_depth_motion.py', 'tools/tum_sparse_depth.py', 'tools/tum_speed_bounds.py', 'tools/tum_visual_yaw.py',
     *(f'mgts_nav/{name}.py' for name in MODULES),
     *(f'tests/test_{name}.py' for name in TESTS),
 )))
