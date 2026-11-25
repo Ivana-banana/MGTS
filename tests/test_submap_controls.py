@@ -1,6 +1,9 @@
 """Reproduce the twelve predeclared multi-map decisions in issue 95."""
 from dataclasses import replace
+from itertools import combinations
+from itertools import islice
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -49,7 +52,8 @@ def surveys(tmp_path_factory):
     ("corridor", 73, False), ("office", 17, True), ("office", 29, True),
 ])
 @pytest.mark.parametrize("radius", [None, 3.])
-def test_blind_sections(surveys, layout, seed, foreign, radius):
+@pytest.mark.parametrize("local_method", ["pairwise", "keyframes"])
+def test_blind_sections(surveys, layout, seed, foreign, radius, local_method):
     sections, scans_in, truth_path = surveys[layout, seed]
     if foreign:
         sections = surveys["corridor", 41][0]
@@ -64,7 +68,7 @@ def test_blind_sections(surveys, layout, seed, foreign, radius):
             reasons[first] = error
             continue
         try:
-            pose = estimate_start(window, *raster, {})
+            pose = estimate_start(window, *raster, {}, local_method=local_method)
         except ValueError as exc:
             reasons[first] = str(exc)
         else:
@@ -81,10 +85,42 @@ def test_blind_sections(surveys, layout, seed, foreign, radius):
             yaw = float(np.rad2deg(abs(wrap(pose[2] - ref.yaw))))
             if xy <= .25 and yaw <= 10:
                 outcome = "correct"
-    print(json.dumps(dict(layout=layout, seed=seed, foreign=foreign, radius=radius,
+    pairs = list(combinations(np.asarray(list(accepted.values())), 2))
+    spread_m = max((np.linalg.norm(a[:2] - b[:2]) for a, b in pairs), default=None)
+    spread_deg = max((np.rad2deg(abs(wrap(a[2] - b[2]))) for a, b in pairs), default=None)
+    print(json.dumps(dict(layout=layout, seed=seed, foreign=foreign, radius=radius, method=local_method,
+                          spread_m=spread_m, spread_deg=spread_deg,
                           accepted=accepted, reasons=reasons, outcome=outcome, xy_m=xy, yaw_deg=yaw)))
     assert set(accepted) | set(reasons) == {0, 40, 80, 120, 160}
     assert all(raster is not None for _, raster, _ in sections)
     assert outcome != "false"
     if foreign:
         assert outcome == "refused"
+
+
+def test_heap1_keyframes_on_saved_sections():
+    data = Path("out/heap1-long-80")
+    maps = Path("out/issue94")
+    if not (data / "inspection").is_dir() or not (maps / "report.json").is_file():
+        pytest.skip("Requires the field recording and section maps from issue 94")
+    cfg = load_config(data / "profile.json")
+    window = list(islice(scans(data / "inspection", cfg), 51))
+    assert len(window) == 51 and all(s.odom is None for s in window)
+    starts, reasons = {}, {}
+    for first in range(0, 300, 40):
+        pixels, meta, _ = read_map(maps / f"section-{first}" / "map.yaml")
+        try:
+            pose = estimate_start(window, pixels, meta, {}, local_method="keyframes")
+        except ValueError as exc:
+            reasons[first] = str(exc)
+        else:
+            starts[first] = pose.tolist()
+    report = dict(starts=starts, reasons=reasons)
+    if len(starts) == 1:
+        ref = read_csv(data / "inspection-reference.csv")[0]
+        assert abs(ref.t - window[0].t) < 1e-6
+        pose = np.asarray(next(iter(starts.values())))
+        report["xy_m"] = np.linalg.norm(pose[:2] - ref[1:3])
+        report["yaw_deg"] = np.rad2deg(abs(wrap(pose[2] - ref.yaw)))
+    print(json.dumps(report))
+    assert len(reasons) + len(starts) == 8
