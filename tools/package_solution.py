@@ -12,7 +12,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
-    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'clock_experiment',
+    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'camera_info', 'clock_experiment',
     'coarse_start', 'continuous', 'delayed_start', 'demo', 'deskew', 'glass_experiment', 'grid',
     'image_pairs', 'initialization', 'interior_loop', 'leveling', 'loop', 'map_eval', 'metrics',
     'motion_disagreement', 'multiscan', 'native_grid', 'observability', 'obstacles', 'plan_alignment',

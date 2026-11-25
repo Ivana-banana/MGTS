@@ -87,3 +87,53 @@ def test_image_bag_to_rotation(tmp_path, angle, encoding, codec):
 def test_invalid_compressed_payload(fmt, reason):
     with pytest.raises(ValueError, match=reason):
         compressed_gray(SimpleNamespace(format=fmt, data=np.arange(64, dtype=np.uint8)), [320, 240])
+
+
+@pytest.mark.parametrize('change', ['', 'projection', 'roi', 'rotation', 'frame'])
+def test_camera_info_to_image_pairs(tmp_path, change):
+    from mgts_nav.image_pairs import convert
+
+    store = get_typestore(Stores.ROS2_HUMBLE)
+    types = store.types
+    path = tmp_path / 'bag'
+    shape = (24, 32)
+    rect = Rotation.from_euler('y', 12, degrees=True)
+    projection = np.array([[29., 0, 15, 0], [0, 30, 11, 0], [0, 0, 1, 0]])
+    with Writer(path, version=8) as writer:
+        info = writer.add_connection('/info', 'sensor_msgs/msg/CameraInfo', typestore=store)
+        image = writer.add_connection('/rect', 'sensor_msgs/msg/Image', typestore=store)
+        for i in range(2):
+            header = types['std_msgs/msg/Header'](types['builtin_interfaces/msg/Time'](1, i*50000000),
+                                                  'different' if i and change == 'frame' else 'optical')
+            roi = types['sensor_msgs/msg/RegionOfInterest'](0, 0, 0, 0, False)
+            p = projection.copy()
+            r = rect.as_matrix()
+            if i and change == 'projection':
+                p[0, 0] += 1
+            if i and change == 'roi':
+                roi.x_offset = 2
+            if i and change == 'rotation':
+                r[0] *= -1
+            msg = types[info.msgtype](header, *shape, 'plumb_bob', np.zeros(5), np.eye(3).ravel(),
+                                      r.ravel(), p.ravel(), 0, 0, roi)
+            writer.write(info, i, store.serialize_cdr(msg, info.msgtype))
+            pixels = np.zeros(shape, dtype=np.uint8)
+            msg = types[image.msgtype](header, *shape, 'mono8', 0, shape[1], pixels.ravel())
+            writer.write(image, i, store.serialize_cdr(msg, image.msgtype))
+    out = tmp_path / 'camera.json'
+    cmd = [sys.executable, '-m', 'mgts_nav.camera_info', str(path), str(out), '--topic', '/info',
+           '--base-from-camera-xyzw', *map(str, BASE_FROM_CAMERA)]
+    run = subprocess.run(cmd, capture_output=True, text=True)
+    if change:
+        assert run.returncode == 2 and not out.exists(), run.stderr
+        return
+    assert run.returncode == 0, run.stderr
+    profile = json.loads(out.read_text())
+    np.testing.assert_array_equal(profile['K'], projection[:, :3])
+    ray = np.array([.1, -.2, 1.])
+    np.testing.assert_allclose(Rotation.from_quat(profile['base_from_camera_xyzw']).apply(rect.apply(ray)),
+                               Rotation.from_quat(BASE_FROM_CAMERA).apply(ray))
+    assert convert(path, '/rect', profile, 0, tmp_path/'pairs.jsonl') == 1
+    original = out.read_bytes()
+    assert subprocess.run(cmd, capture_output=True).returncode == 2
+    assert out.read_bytes() == original
