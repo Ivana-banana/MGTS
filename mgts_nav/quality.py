@@ -5,7 +5,7 @@ from statistics import median
 import numpy as np
 
 
-def scan_intervals(estimates):
+def scan_intervals(estimates, gap_threshold_s=None):
     """Return successive intervals, the gap threshold and indices following gaps."""
     times = np.asarray([row.t for row in estimates], dtype=float)
     if not len(times) or not np.isfinite(times).all():
@@ -15,14 +15,19 @@ def scan_intervals(estimates):
         raise ValueError('Inspection scan timestamps must increase')
 
     # Gaps have no rows. Report them independently of consecutive rejected scans.
-    gap_threshold = 3 * float(np.median(intervals)) if len(intervals) >= 2 else None
+    if gap_threshold_s is None:
+        gap_threshold = 3 * float(np.median(intervals)) if len(intervals) >= 2 else None
+    else:
+        gap_threshold = float(gap_threshold_s)
+        if not np.isfinite(gap_threshold) or gap_threshold <= 0:
+            raise ValueError('Gap threshold must be a positive number of seconds')
     ends = np.flatnonzero(intervals > gap_threshold) + 1 if gap_threshold is not None else []
     return intervals, gap_threshold, ends
 
 
-def inspection_quality(estimates):
+def inspection_quality(estimates, gap_threshold_s=None):
     """Summarize the scan-rate output of track(); no reference poses are used."""
-    intervals, gap_threshold, ends = scan_intervals(estimates)
+    intervals, gap_threshold, ends = scan_intervals(estimates, gap_threshold_s)
     times = [row.t for row in estimates]
     gaps = [dict(start_s=float(times[i-1]), end_s=float(times[i]),
                  duration_s=float(intervals[i-1])) for i in ends]
