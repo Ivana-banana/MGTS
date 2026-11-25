@@ -40,6 +40,8 @@ FILES = tuple(sorted((
     'configs/demo-zones.json', 'configs/example.json', 'configs/inspection.rviz', 'docs/ambiguity.md',
     'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg', 'tools/custom_lidar.py',
     'docs/drift-warning-trial.md', 'docs/independent-icp.md', 'docs/kitti-repeat.md',
+    'docs/jury-field-example.html', 'tools/jury_report.py',
+    'docs/stable-occupancy-trial.md', 'tools/stable_occupancy_trial.py',
     'tools/drift_warning_trial.py', 'tools/independent_icp.py', 'tools/kitti_repeat.py', 'tools/kitti_warning_trial.py',
     'docs/angular-recovery-controls.md', 'docs/camera-diagnosis.csv', 'docs/camera-diagnosis.md',
     'docs/camera-experiment.md', 'docs/clock-offset.md', 'docs/coarse-corridor.md',
