@@ -39,9 +39,13 @@ def test_unavailable_fields_in_recorded_imu(tmp_path):
         elif scan.t < 251.9 or scan.t > 253.2:
             assert scan.gyro_delta == ref.gyro_delta
         np.testing.assert_array_equal(scan.xy, ref.xy)
-    assert audit(target, cfg)["coverage"]["imu"]["covered"] == 99
+    report = audit(target, cfg)
+    assert report["coverage"]["imu"]["covered"] == 99
+    assert report["imu_measurements"]["linear_acceleration_available"] == 451
     leveled = list(scans(target, dict(cfg, gravity_level=True)))
     for scan in leveled:
         if 252.15 < scan.t < 253. or 256.15 < scan.t < 257.:
             assert scan.gyro_delta is None and scan.empty_reason == "leveling_unavailable"
     assert leveled[-1].gyro_delta is not None and len(leveled[-1].xy) > 0
+    assert audit(target, dict(cfg, gravity_level=True))["imu_measurements"]["gyro_delta"]["available"] == sum(
+        scan.gyro_delta is not None for scan in leveled)
