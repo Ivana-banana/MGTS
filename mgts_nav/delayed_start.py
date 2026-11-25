@@ -67,6 +67,8 @@ def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
             starts.append(compose(anchor, relative(local[i], np.zeros(3))))
             anchors.append(anchor)
         slot['score'] = diag.get('best_score')
+        slot['candidate'] = diag.get('best_refined_pose')
+        slot['rival_score'] = diag.get('rival_score')
         stats['anchors'].append(slot)
     if len(starts) < 3:
         raise ValueError('Fewer than three accepted global poses')
