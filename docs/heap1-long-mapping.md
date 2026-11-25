@@ -91,3 +91,21 @@ if ($LASTEXITCODE -eq 0) {
     & $python -m mgts_nav localize "$data/inspection" --config "$data/profile.json" --map out/heap1-velocity-88/map.yaml --initial-file out/prefix-start.json --out out/prefix-localized
 }
 ```
+## Поиск по всем участкам обхода
+
+В отдельном опыте убрали подсказку о зоне возврата. Все 300 сканов обхода разбили по времени на семь частей по 40 сканов и одну из 20. Для каждой части построили свою сетку 8 см из исходных сканов и поз, полученных с прогнозом скорости. Все сетки используют общую систему координат полной карты. Для каждой запустили один и тот же `delayed` на первых 51 сканах инспекции. Условие до запуска разрешало выдать старт только при единственной принятой части. [План эксперимента №94](https://github.com/Ivana-banana/MGTS/issues/94)
+
+На участке кадров 150–189 пять из шести кандидатов получили достаточную поддержку и согласовались с локальным движением. На остальных семи участках все кандидаты были отклонены. Найденная начальная поза в системе карты — (1,0800 м, 1,3192 м, −0,03652 рад). Штатный локализатор по **полной** карте подтвердил 60/60 сканов, RMSE составила **6,30 см по XY и 0,358° по курсу**, пик позиционной ошибки — 11,08 см. Эталон CPT7 читался только после поиска и локализации. Это одна проверка на том же возврате HEAP-1. Независимые проверки на повторяющейся геометрии собраны в [№95](https://github.com/Ivana-banana/MGTS/issues/95).
+
+```powershell
+$python = '.\.venv-mgts\Scripts\python.exe'
+$data = 'out/heap1-long-80'
+$full = 'out/heap1-velocity-88'
+$sections = 'out/field-sections'
+& $python -m tools.heap1_submap_start $data $full $sections --grid-dll out/native-grid-backend-25/native_grid.dll
+if ($LASTEXITCODE -eq 0 -and (Test-Path "$sections/start.json")) {
+    & $python -m mgts_nav localize "$data/inspection" --config "$data/profile.json" --map "$full/map.yaml" --initial-file "$sections/start.json" --out out/field-sections-track
+}
+```
+
+Для нового прогона нужен свободный путь `$sections`. В нём сохраняются восемь карт и `report.json` с результатами всех попыток. При отказе или нескольких принятых частях файл позы отсутствует. Без `--grid-dll` построение частичных карт выполняется в Python.
