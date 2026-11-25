@@ -25,7 +25,7 @@
 При сбросе из всех последующих координат одометрии вычитается первое вернувшееся положение (1,57070; 0,07046) м. Оси, угол, имя кадра и временные метки сохраняются. Обычный прогноз на первом новом скане использует разность поз одометрии у двух наблюдаемых сканов; смена начала координат входит в эту разность. Проверена одна геометрия, две реализации шума и один момент сброса. Доверять такому прогнозу в новом здании до повторной привязки оснований нет.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m tools.evaluate_joint_outage out/joint-outage-new
 & $python -m pytest -q tests/test_joint_outage.py tests/test_continuous.py tests/test_recovery.py
 ```

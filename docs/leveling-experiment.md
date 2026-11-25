@@ -41,7 +41,7 @@
 Из корня MGTS в локальном Windows PowerShell, с новым выходным каталогом:
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m tools.evaluate_leveling out/leveling-24
 & $python -m pytest -q tests/test_leveling_experiment.py tests/test_leveling.py tests/test_bag.py
 ```

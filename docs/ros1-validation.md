@@ -14,13 +14,13 @@
 Из корня MGTS выполните команду. Она генерирует данные во временном каталоге, запускает оба конвейера и выводит SHA-256 сравниваемых файлов.
 
 ```powershell
-& ..\Transport_MSK\.venv\Scripts\python.exe -m pytest -q -s tests/test_ros1_pipeline.py
+& .\.venv-mgts\Scripts\python.exe -m pytest -q -s tests/test_ros1_pipeline.py
 ```
 
 При работе с собственными файлами ROS 1 передайте пути к `.bag` напрямую. Подставьте профиль установки и новое имя выходного каталога.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m mgts_nav inspect data/mapping.bag
 & $python -m mgts_nav.sync data/inspection.bag --config data/inspection.json --require-complete
 & $python -m mgts_nav.solve data/mapping.bag data/inspection.bag --config data/mapping.json --inspection-config data/inspection.json --out out/ros1-run

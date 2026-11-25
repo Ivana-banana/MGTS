@@ -94,7 +94,7 @@ $seed = (Get-Content out/heap1-map/summary.json -Raw | ConvertFrom-Json).final_p
 Запустить в том же окружении с `numcodecs`, что и предыдущую проверку. Для автостарта ожидается диагностический выход с кодом 2. Сравнение обоих режимов использует одну карту и один bag инспекции.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python tools/heap1_revisit.py out/heap1-revisit-v2
 $data = 'out/heap1-revisit-v2'
 & $python -m mgts_nav map "$data/mapping" --config "$data/profile.json" --out out/heap1-revisit-map

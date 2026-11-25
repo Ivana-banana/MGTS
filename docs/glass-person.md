@@ -26,7 +26,7 @@
 Из корня MGTS в Windows PowerShell, с новым выходным каталогом:
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m mgts_nav.glass_experiment out/glass-person
 & $python -m pytest -q tests/test_glass_experiment.py tests/test_map_eval.py
 ```
