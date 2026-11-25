@@ -16,7 +16,7 @@ MODULES = (
     'coarse_start', 'continuous', 'delayed_start', 'demo', 'deskew', 'glass_experiment', 'grid',
     'image_pairs', 'initialization', 'interior_loop', 'leveling', 'loop', 'map_eval', 'metrics',
     'motion_disagreement', 'multiscan', 'native_grid', 'observability', 'obstacles', 'plan_alignment',
-    'pose_graph', 'profile', 'quality', 'recovery', 'rehearse', 'ros_export', 'self_check', 'slam', 'solve',
+    'pose_graph', 'profile', 'quality', 'drift_warning', 'recovery', 'rehearse', 'ros_export', 'self_check', 'slam', 'solve',
     'solve_audit', 'solve_manifest', 'start_confirmation', 'start_trial', 'stress', 'sync', 'vision',
     'visual_fusion', 'zones',
 )

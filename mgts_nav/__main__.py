@@ -48,10 +48,14 @@ def run(args, output):
     automatic = start is None
     start_method = 'map_origin' if args.command == 'map' else 'provided'
     search_diagnostics = {}
+    drift_recovery = None
     recovery = None
     if args.command == 'localize':
         map_path = args.map
         pixels, meta, points = read_map(map_path)
+        if getattr(args, 'recover_drift', False):
+            from .recovery import DriftRecovery
+            drift_recovery = DriftRecovery(pixels, meta)
         if args.recover:
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
@@ -140,7 +144,7 @@ def run(args, output):
             raise ValueError(f'{exc}: {detail}') from exc
         map_path = output / 'map.yaml'
     elif args.command == 'localize':
-        estimates = list(track(stream, start, map_points=points, recovery=recovery))
+        estimates = list(track(stream, start, map_points=points, recovery=recovery, drift_recovery=drift_recovery))
         rejections = scan_rejections(estimates)
     else:
         first = None
@@ -161,7 +165,7 @@ def run(args, output):
     if not estimates:
         raise ValueError('No scans in recording')
     counts = Counter(r.status for r in estimates)
-    if args.command == 'localize' and not counts['matched']:
+    if args.command == 'localize' and not counts['matched'] and not counts['uncertain']:
         raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
                          f'Rejections: {json.dumps(rejections["counts"])}')
     with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
@@ -182,6 +186,8 @@ def run(args, output):
         summary['quality'] = inspection_quality(estimates)
     if visual_stats:
         summary['visual_yaw'] = visual_stats
+    if drift_recovery is not None:
+        summary['drift_recovery'] = drift_recovery.stats
     if recovery is not None:
         summary['recovery'] = recovery.stats
     (output / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
@@ -223,6 +229,7 @@ def main():
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
+            p.add_argument('--recover-drift', action='store_true', help='Experimentally recheck a matched pose after a drift warning')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
     args = parser.parse_args()
     try:

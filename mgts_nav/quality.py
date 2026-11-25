@@ -34,20 +34,25 @@ def inspection_quality(estimates, gap_threshold_s=None):
 
     support = []
     losses = []
+    uncertain = []
     for status, rows in groupby(enumerate(estimates), key=lambda item: item[1].status):
         if status == 'matched':
             support.extend(row.inliers for _, row in rows)
+        elif status == 'uncertain':
+            group = [row for _, row in rows]
+            uncertain.append(dict(first_s=group[0].t, last_s=group[-1].t, scans=len(group)))
         elif status == 'prediction_only':
             indices = [index for index, _ in rows]
             first, last = indices[0], indices[-1]
             losses.append(dict(first_prediction_s=float(times[first]), last_prediction_s=float(times[last]),
                                scans=len(indices),
-                               previous_match_s=float(times[first - 1]) if first else None,
-                               next_match_s=float(times[last + 1]) if last + 1 < len(times) else None))
+                               previous_match_s=float(times[first - 1]) if first and estimates[first-1].status == 'matched' else None,
+                               next_match_s=float(times[last + 1]) if last + 1 < len(times) and estimates[last+1].status == 'matched' else None))
         else:
             raise ValueError(f'Unexpected inspection status: {status}')
 
-    return dict(matched_scan_fraction=len(support) / len(times),
+    extra = {'uncertain_runs': uncertain} if uncertain else {}
+    return dict(**extra, matched_scan_fraction=len(support) / len(times),
                 median_inlier_fraction_on_matches=float(median(support)) if support else None,
                 max_scan_interval_s=float(intervals.max()) if len(intervals) else None,
                 gap_threshold_s=gap_threshold, scan_gaps=gaps, prediction_runs=losses)

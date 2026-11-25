@@ -129,7 +129,7 @@ class Estimate:
     rejection_reason: str | None = None
 
 
-def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocity_prior=None):
+def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocity_prior=None, drift_recovery=None):
     building = grid is not None
     if building == (map_points is not None):
         raise ValueError('Supply either a grid to build or an existing map')
@@ -159,6 +159,14 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocit
                 distances = tree.query(world(scan.xy, pose))[0]
                 support = float(np.mean(distances < .16))
                 status = 'matched'
+        if drift_recovery is not None:
+            confirmed = drift_recovery.update(scan, pose, support, status == 'matched', tree)
+            if confirmed is not None:
+                pose = confirmed
+                support = float(np.mean(tree.query(world(scan.xy, pose))[0] < .16))
+                status = 'matched'
+            elif drift_recovery.uncertain:
+                status = 'uncertain'
         if building and status != 'prediction_only':
             points = world(scan.xy, pose)
             grid.observe(world(scan.origin, pose), points)
