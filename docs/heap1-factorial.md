@@ -8,11 +8,16 @@ CPT7 прочитан после построения всех карт и вс�
 
 ## Воспроизведение
 
+![Ошибка положения по времени у четырёх вариантов обхода HEAP-1](heap1-drift.png)
+
+На рисунке показана ошибка положения корпуса в плоскости карты на метках CPT7, от кадра 150 до кадра 449. Масштаб одинаков во всех панелях. Источник измерений — ETH Zürich, Robotic Systems Lab, GrandTour HEAP-1. MGTS восстановил четыре траектории и построил графики отклонения от опоры. Производный рисунок распространяется по CC BY-SA 4.0. [Данные и авторство](public-data.md) · [Лицензия](https://creativecommons.org/licenses/by-sa/4.0/)
+
 Из корня MGTS в Windows PowerShell, после подготовки исходных bag по №80 и компенсированного bag по №90. Команда создаёт новый каталог, четыре карты, результаты инспекций и scores.json с диагностикой каждого слепого поиска.
 
 ```powershell
 $python = '.\.venv-mgts\Scripts\python.exe'
 & $python -m tools.heap1_factorial out/heap1-long-80 out/heap1-timing-90/gyro out/heap1-factorial-96
+& $python -m tools.plot_heap1_drift out/heap1-long-80/mapping-reference.csv out/heap1-factorial-96 out/field-drift.png
 ```
 
 ## Результаты
