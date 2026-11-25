@@ -27,7 +27,7 @@ FILES = tuple(sorted((
     'tools/evaluate_deskew.py', 'docs/deskew-experiment.md',
     'docs/coarse-start.md', 'docs/delayed-start.md', 'docs/delayed-start-controls.md',
     'docs/keyframe-start.md', 'docs/obstacles.md', 'docs/solve-manifest.md', 'docs/interior-loop.md',
-    'docs/solve-audit.md',
+    'docs/solve-audit.md', 'docs/heap1-velocity-prior.md',
     'tools/native_grid.cpp', 'tools/benchmark_native_grid.py', 'docs/native-grid.md',
     'docs/plan-alignment.md', 'docs/plan-landmarks.json', 'docs/office-plan.png', 'docs/plan-route.png',
     'docs/intake.md', 'docs/public-data.md', 'docs/report.md', 'docs/runtime.md',

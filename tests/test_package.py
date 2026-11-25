@@ -34,7 +34,7 @@ def test_diagnostics_from_zip(tmp_path):
     archive.write_bytes(payload)
     with zipfile.ZipFile(archive) as source:
         for guide in ('delayed-start', 'delayed-start-controls', 'keyframe-start', 'coarse-start',
-                      'obstacles', 'solve-manifest', 'interior-loop'):
+                      'obstacles', 'solve-manifest', 'interior-loop', 'heap1-velocity-prior'):
             assert source.getinfo(f'docs/{guide}.md').file_size > 0
     prefix = [sys.executable, '-I', '-c', ZIP_CLI, str(archive)]
     for module in ('delayed_start', 'obstacles', 'solve_audit', 'solve_manifest', 'interior_loop'):
