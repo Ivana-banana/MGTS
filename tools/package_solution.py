@@ -70,7 +70,7 @@ FILES = tuple(sorted((
     'tools/evaluate_motion_disagreement.py', 'tools/evaluate_visit_agreement.py',
     'tools/evaluate_zone_visits.py', 'tools/heap1_clock_lag.py', 'tools/heap1_drift.py',
     'tools/heap1_factorial.py', 'tools/heap1_gyro_dropout.py', 'tools/heap1_holdout.py',
-    'tools/heap1_inspection_deskew.py', 'tools/heap1_long_mapping.py', 'tools/heap1_map_anchors.py',
+    'tools/heap1_inspection_deskew.py', 'tools/heap1_micrometre.py', 'tools/heap1_long_mapping.py', 'tools/heap1_map_anchors.py',
     'tools/heap1_point_times.py', 'tools/heap1_revisit.py', 'tools/heap1_sample.py',
     'tools/heap1_stationary_start.py', 'tools/heap1_submap_holdout.py', 'tools/heap1_submap_start.py',
     'tools/heap1_surface_trial.py', 'tools/heap1_timed_bag.py', 'tools/heap1_turn_recovery.py',
