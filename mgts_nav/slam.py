@@ -7,6 +7,10 @@ from scipy.spatial import cKDTree
 
 
 MIN_MATCH_POINTS = 12
+# Wall-surface targets for localization, see WallSurface.
+SURFACE_RADIUS_CELLS = 1.5   # 3x3 cell neighbourhood
+SURFACE_MAX_RATIO = 0.4      # smaller/larger spread of a line-like neighbourhood
+SURFACE_MIN_WALL_M = 1.5     # wall length that must constrain the weakest direction
 
 
 def rotation(yaw):
@@ -32,8 +36,12 @@ def predict(pose, previous, scan):
     return np.r_[world(step[:2], pose), pose[2] + step[2]]
 
 
-def match(scan, tree, seed, radius=0.45):
-    """Trimmed point-to-point ICP. Return the prior if support is insufficient."""
+def match(scan, tree, seed, radius=0.45, targets=None):
+    """Trimmed point-to-point ICP. Return the prior if support is insufficient.
+
+    ``targets`` maps matched tree indices to the points ICP aligns to; by default
+    these are the tree points themselves (see ``WallSurface``).
+    """
     pose = seed.copy()
     fraction = 0.0
     if len(scan) < MIN_MATCH_POINTS:
@@ -46,7 +54,8 @@ def match(scan, tree, seed, radius=0.45):
         if fraction < 0.40 or valid.sum() < MIN_MATCH_POINTS:
             return seed, fraction, False
         keep = valid & (distances <= max(0.06, np.quantile(distances[valid], 0.85)))
-        a, b = src[keep], tree.data[indices[keep]]
+        a = src[keep]
+        b = tree.data[indices[keep]] if targets is None else targets(indices[keep])
         ac, bc = a.mean(axis=0), b.mean(axis=0)
         left = a - ac
         right = b - bc
@@ -68,21 +77,99 @@ def match(scan, tree, seed, radius=0.45):
     return pose, fraction, True
 
 
-def surface_points(points):
-    """Replace grid cell centres by the mean of their occupied 3x3 neighbourhood.
+class WallSurface:
+    """Matched cell centres projected onto the local wall line, computed lazily.
 
     Cell centres of an occupancy grid describe a wall as a staircase that is
-    offset by up to half a cell. The neighbourhood mean puts each point on the
-    local wall line, so ICP is not biased toward one row of cells. The cell
-    size is the median spacing between neighbouring map points.
+    offset by up to half a cell from the true surface. For a matched centre the
+    occupied cells of its 3x3 neighbourhood are fitted with a line, and the
+    centre moves along the line normal onto it. Along the wall the point stays
+    put. Wall ends of a two-cell-thick wall, single cells and cluttered
+    patches, whose neighbourhood is not line-like, keep their centre. The
+    corner cell of a one-cell-thick L (three cells) still counts as line-like
+    and moves diagonally by a third of a cell.
+
+    The surface is used only for scans whose map neighbourhood constrains both
+    translation directions (``constrains``). In a corridor seen at short range
+    the smooth surface lets ICP slide along the walls with the odometry scale
+    error, while the staircase of cell centres happens to hold it; such scans
+    are matched against cell centres, exactly as without the surface.
+
+    Only centres that ICP actually touches are processed and cached, so loading
+    a large map costs the same time and memory as the plain KD-tree.
     """
+
+    def __init__(self, tree, *, radius_cells=SURFACE_RADIUS_CELLS, max_ratio=SURFACE_MAX_RATIO,
+                 min_wall_m=SURFACE_MIN_WALL_M):
+        self.tree = tree
+        data = tree.data
+        sample = data[::max(1, len(data) // 4096)]
+        spacing = np.median(tree.query(sample, k=2)[0][:, 1]) if len(data) > 1 else 0.0
+        valid = np.isfinite(spacing) and spacing > 0
+        self.radius = radius_cells * spacing if valid else 0.0
+        self.min_cells = min_wall_m / spacing if valid else np.inf
+        self.max_ratio = max_ratio
+        # Processed map indices (sorted) and their rows of x, y, nx, ny.
+        self.known = np.empty(0, dtype=np.intp)
+        self.rows = np.empty((0, 4))
+
+    def _patches(self, indices):
+        """Rows of target x, y and unit normal (zero if not line-like) per index."""
+        indices = np.asarray(indices, dtype=np.intp)
+        if not self.radius:
+            return np.column_stack([self.tree.data[indices], np.zeros((len(indices), 2))])
+        slot = np.searchsorted(self.known, indices)
+        hit = slot < len(self.known)
+        hit[hit] = self.known[slot[hit]] == indices[hit]
+        if not hit.all():
+            data = self.tree.data
+            missing = np.unique(indices[~hit])
+            groups = self.tree.query_ball_point(data[missing], self.radius)
+            new = np.array([wall_patch(data[i], data[ids], self.max_ratio)
+                            for i, ids in zip(missing, groups)]).reshape(-1, 4)
+            at = np.searchsorted(self.known, missing)
+            self.known = np.insert(self.known, at, missing)
+            self.rows = np.insert(self.rows, at, new, axis=0)
+            slot = np.searchsorted(self.known, indices)
+        return self.rows[slot]
+
+    def __call__(self, indices):
+        return self._patches(indices)[:, :2]
+
+    def constrains(self, xy, pose, radius=0.45):
+        """True if line-like map cells near the scan pin both translation directions.
+
+        The smaller eigenvalue of the sum of n n^T over distinct matched cells
+        is the number of cells, i.e. the wall length in cells, acting along the
+        weakest direction. Counting distinct cells keeps a denser lidar from
+        inflating it; a scan sparser than the grid counts fewer cells.
+        """
+        distances, indices = self.tree.query(world(xy, pose), distance_upper_bound=radius)
+        normals = self._patches(np.unique(indices[np.isfinite(distances)]))[:, 2:]
+        return bool(np.linalg.eigvalsh(normals.T @ normals)[0] >= self.min_cells)
+
+
+def wall_patch(point, neighbours, max_ratio=SURFACE_MAX_RATIO):
+    """Project ``point`` onto the line fitted to ``neighbours``; return x, y, nx, ny."""
+    x, y = float(point[0]), float(point[1])
+    if len(neighbours) < 3:
+        return x, y, 0.0, 0.0
+    mean = neighbours.mean(axis=0)
+    centred = neighbours - mean
+    values, axes = np.linalg.eigh(centred.T @ centred)
+    if values[1] <= 0 or values[0] > max_ratio * values[1]:
+        return x, y, 0.0, 0.0
+    normal = axes[:, 0]
+    x, y = point - ((point - mean) @ normal) * normal
+    return float(x), float(y), float(normal[0]), float(normal[1])
+
+
+def surface_points(points):
+    """Project every map point onto its local wall line (eager form of WallSurface)."""
     points = np.asarray(points, dtype=float)
-    tree = cKDTree(points)
-    spacing = np.median(tree.query(points, k=2)[0][:, 1])
-    if not np.isfinite(spacing) or spacing <= 0:
+    if len(points) < 2:
         return points
-    neighbours = tree.query_ball_point(points, 1.5 * spacing)
-    return np.array([points[ids].mean(axis=0) for ids in neighbours])
+    return WallSurface(cKDTree(points))(np.arange(len(points)))
 
 
 @dataclass
@@ -94,14 +181,21 @@ class Estimate:
     rejection_reason: str | None = None
 
 
-def track(stream, initial, *, grid=None, map_points=None, recovery=None):
+def track(stream, initial, *, grid=None, map_points=None, recovery=None, surface=False):
+    """Build a map (``grid``) or localize against ``map_points``.
+
+    With ``surface`` localization aligns well-constrained scans to the wall
+    surface (``WallSurface``) instead of raw cell centres. It is off by default
+    until it is confirmed on field data (docs/accuracy-experiment.md).
+    """
     building = grid is not None
     if building == (map_points is not None):
         raise ValueError('Supply either a grid to build or an existing map')
     pose = np.asarray(initial, dtype=float)
     if pose.shape != (3,) or not np.isfinite(pose).all():
         raise ValueError('initial pose must contain finite x, y, yaw')
-    tree = None if building else cKDTree(surface_points(map_points))
+    tree = None if building else cKDTree(map_points)
+    targets = WallSurface(tree) if surface and tree is not None else None
     previous = None
     keyframes = deque(maxlen=18)
     keypose = None
@@ -112,7 +206,8 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None):
         if tree is None and len(scan.xy) >= MIN_MATCH_POINTS:
             status = 'origin'
         elif tree is not None:
-            pose, support, accepted = match(scan.xy, tree, predicted)
+            use = targets if targets is not None and targets.constrains(scan.xy, predicted) else None
+            pose, support, accepted = match(scan.xy, tree, predicted, targets=use)
             if accepted:
                 status = 'matched'
         if recovery is not None:

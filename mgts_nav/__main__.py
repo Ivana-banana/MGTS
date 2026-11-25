@@ -110,7 +110,8 @@ def run(args, output):
         grid.save(output)
         map_path = output / 'map.yaml'
     elif args.command == 'localize':
-        estimates = list(track(stream, start, map_points=points, recovery=recovery))
+        estimates = list(track(stream, start, map_points=points, recovery=recovery,
+                               surface=args.wall_surface))
     else:
         first = None
         with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
@@ -186,6 +187,9 @@ def main():
                                help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
+            p.add_argument('--wall-surface', action='store_true',
+                           help='Experimental: match well-constrained scans to the wall surface, '
+                                'not raw cell centres')
     args = parser.parse_args()
     try:
         if args.command == 'inspect':

@@ -24,7 +24,6 @@ from mgts_nav.demo import PROFILE, generate  # noqa: E402
 from mgts_nav.grid import Grid, read_map  # noqa: E402
 from mgts_nav.initialization import estimate_initial  # noqa: E402
 from mgts_nav.metrics import Pose, evaluate, read_csv, wrap  # noqa: E402
-from mgts_nav import slam  # noqa: E402
 from mgts_nav.slam import track  # noqa: E402
 from mgts_nav.stress import CASES, fault_bag  # noqa: E402
 
@@ -32,6 +31,7 @@ SEEDS = {"office": (17, 101, 202, 303, 404), "corridor": (41, 73, 505, 606, 707)
 START_TOLERANCE = (0.25, np.radians(10))
 EXTRA_CASES = ("range_3m", "start_offset")
 START_OFFSET = np.array([0.15, -0.10, np.radians(5)])
+SURFACE = True  # --cell-centres turns the wall-surface targets off
 
 
 def limited(stream, max_range):
@@ -45,7 +45,7 @@ def localize(source, cfg, initial, points, truth, max_range=None):
     stream = scans(source, cfg)
     if max_range is not None:
         stream = limited(stream, max_range)
-    rows = list(track(stream, initial, map_points=points))
+    rows = list(track(stream, initial, map_points=points, surface=SURFACE))
     elapsed = perf_counter() - began
     metrics = evaluate([Pose(r.t, *r.pose) for r in rows], truth)
     times = np.array([p.t for p in truth])
@@ -179,7 +179,8 @@ def main():
         print(compare(before, after))
         return
     if args.cell_centres:
-        slam.surface_points = lambda points: np.asarray(points, dtype=float)
+        global SURFACE
+        SURFACE = False
     data = args.data or args.out / "data"
     rows = run(args.out, data, args.layout or list(SEEDS))
     print(table(rows))
