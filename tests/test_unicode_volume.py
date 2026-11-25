@@ -3,7 +3,9 @@ import os
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
+import pytest
 import yaml
 
 from mgts_nav.demo import PROFILE, generate
@@ -65,6 +67,8 @@ def test_utf8_volume_names_through_cli(tmp_path):
                 assert result == control[key]
 
 
+@pytest.mark.skipif(not (Path(__file__).resolve().parents[1] / ".git").exists(),
+                    reason="Building a historical ZIP needs the MGTS Git checkout")
 def test_solve_children_inherit_utf8_mode(tmp_path):
     data = tmp_path / 'recordings'
     generate(data)

@@ -2,6 +2,8 @@ import ast
 import hashlib
 import json
 import os
+import posixpath
+import re
 import subprocess
 import sys
 import zipfile
@@ -68,6 +70,24 @@ def test_diagnostics_from_zip(tmp_path):
           'pairs, SHA-256', hashlib.sha256(packaged).hexdigest())
 
 
+def test_archived_pose_graph_tests(tmp_path):
+    archive = tmp_path / 'runtime.zip'
+    archive.write_bytes(build('HEAD')[1])
+    with zipfile.ZipFile(archive) as source:
+        test = source.extract('tests/test_pose_graph.py', tmp_path)
+    launcher = """
+import sys
+from pathlib import Path
+import pytest
+archive, test = sys.argv[1:]
+sys.path.insert(0, archive)
+from mgts_nav import pose_graph
+assert Path(archive) in Path(pose_graph.__file__).parents
+sys.exit(pytest.main(['-q', '--import-mode=importlib', test]))
+"""
+    subprocess.run([sys.executable, '-I', '-c', launcher, str(archive), test], check=True)
+
+
 def test_archived_rehearsal_uses_packaged_profile_and_children(tmp_path):
     _, payload = build('HEAD')
     archive = tmp_path / 'runtime.zip'
@@ -96,13 +116,18 @@ def test_reproducible_committed_runtime(tmp_path):
         assert {name for name in names if name.startswith('configs/')} == {
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
         }
-        assert {name for name in names if name.startswith('tools/')} == {
-            'tools/plot_quality.py', 'tools/evaluate_camera.py', 'tools/evaluate_deskew.py',
-            'tools/native_grid.cpp', 'tools/benchmark_native_grid.py',
-            'tools/plot_heap1_revisit.py',
-        }
-        assert all(name.startswith(('mgts_nav/', 'docs/', 'configs/', 'tools/'))
-                   or name in ('README.md', 'requirements.txt') for name in names)
+        tracked = subprocess.check_output(
+            ['git', 'ls-tree', '-r', '--name-only', commit, '--', 'mgts_nav', 'tests', 'tools'],
+            encoding='utf-8').splitlines()
+        assert set(tracked) - {'tests/test_package.py'} <= set(names)
+        assert {'Dockerfile', '.dockerignore', 'pytest.ini', 'docs/package.md'} <= set(names)
+        for guide in (name for name in names if name.endswith('.md')):
+            for link in re.findall(r'\]\(([^ )]+)\)', result.read(guide).decode('utf-8-sig')):
+                target = link.split('#')[0]
+                if not target or ':' in target:
+                    continue
+                path = posixpath.normpath(posixpath.join(posixpath.dirname(guide), target))
+                assert path in names or path in ('AGENTS.md', 'COORDINATION.md'), (guide, path)
         assert not any(name.endswith(('.bag', '.mcap', '.db3')) for name in names)
         for name in names:
             if name.startswith('mgts_nav/'):
