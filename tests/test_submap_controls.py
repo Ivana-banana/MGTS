@@ -16,35 +16,69 @@ from mgts_nav.metrics import read_csv, wrap
 from mgts_nav.slam import track, world
 
 
+def consensus(poses):
+    poses = list(poses)
+    if not poses:
+        return None
+    if len(poses) == 1:
+        return np.asarray(poses[0])
+    for a, b in combinations(np.asarray(poses), 2):
+        if np.linalg.norm(a[:2] - b[:2]) > .20 or abs(wrap(a[2] - b[2])) > np.deg2rad(6):
+            return None
+    x, y, angles = np.asarray(poses).T
+    return np.array([np.median(x), np.median(y), np.arctan2(np.sin(angles).sum(), np.cos(angles).sum())])
+
+
+def judge(pose, truth_path, index, stamp, foreign=False):
+    if pose is None:
+        return "refused", None, None
+    if foreign:
+        return "false", None, None
+    ref = read_csv(truth_path)[index]
+    assert abs(ref.t - stamp) < 1e-8
+    xy = float(np.linalg.norm(pose[:2] - ref[1:3]))
+    yaw = float(np.rad2deg(abs(wrap(pose[2] - ref.yaw))))
+    return ("correct" if xy <= .25 and yaw <= 10 else "false"), xy, yaw
+
+
+def test_consensus_checks_every_pair_and_wraps_heading():
+    assert consensus([[0., 0., 0.], [.15, 0., 0.], [.30, 0., 0.]]) is None
+    assert consensus([[0., 0., 0.], [0., 0., np.deg2rad(7)]]) is None
+    pose = consensus([[0., 0., np.deg2rad(179)], [.20, 0., np.deg2rad(-179)]])
+    np.testing.assert_allclose(pose[:2], [.10, 0.])
+    assert abs(pose[2]) == pytest.approx(np.pi)
+
+
+def make_survey(tmp_path_factory, layout, seed):
+    config = load_config(PROFILE)
+    root = tmp_path_factory.mktemp(f"{layout}-{seed}")
+    data = root / "data"
+    generate(data, layout=layout, seed=seed)
+    survey = list(scans(data / "mapping", config))
+    trajectory = list(track(survey, np.zeros(3), grid=Grid(.08)))
+    sections = []
+    for first in range(0, len(survey), 40):
+        grid = Grid(.08)
+        for scan, row in zip(survey[first:first+40], trajectory[first:first+40], strict=True):
+            assert scan.t == row.t
+            if row.status in ("origin", "matched"):
+                grid.observe(world(scan.origin, row.pose), world(scan.xy, row.pose))
+        directory = root / str(first)
+        directory.mkdir()
+        try:
+            grid.save(directory)
+        except ValueError as exc:
+            sections.append((first, None, str(exc)))
+        else:
+            pixels, meta, _ = read_map(directory / "map.yaml")
+            sections.append((first, (pixels, meta), None))
+    inspection = list(scans(data / "inspection", dict(config, odom=None)))
+    return sections, inspection, data / "inspection_truth.csv"
+
 @pytest.fixture(scope="module")
 def surveys(tmp_path_factory):
-    config = load_config(PROFILE)
-    result = {}
-    for layout, seed in (("office", 17), ("office", 29), ("corridor", 41), ("corridor", 73)):
-        root = tmp_path_factory.mktemp(f"{layout}-{seed}")
-        data = root / "data"
-        generate(data, layout=layout, seed=seed)
-        survey = list(scans(data / "mapping", config))
-        trajectory = list(track(survey, np.zeros(3), grid=Grid(.08)))
-        sections = []
-        for first in range(0, len(survey), 40):
-            grid = Grid(.08)
-            for scan, row in zip(survey[first:first+40], trajectory[first:first+40], strict=True):
-                assert scan.t == row.t
-                if row.status in ("origin", "matched"):
-                    grid.observe(world(scan.origin, row.pose), world(scan.xy, row.pose))
-            directory = root / str(first)
-            directory.mkdir()
-            try:
-                grid.save(directory)
-            except ValueError as exc:
-                sections.append((first, None, str(exc)))
-            else:
-                pixels, meta, _ = read_map(directory / "map.yaml")
-                sections.append((first, (pixels, meta), None))
-        inspection = list(scans(data / "inspection", dict(config, odom=None)))
-        result[layout, seed] = sections, inspection, data / "inspection_truth.csv"
-    return result
+    return {(layout, seed): make_survey(tmp_path_factory, layout, seed)
+            for layout, seed in (("office", 17), ("office", 29), ("corridor", 41), ("corridor", 73))}
 
 
 @pytest.mark.parametrize("layout,seed,foreign", [
@@ -74,28 +108,34 @@ def test_blind_sections(surveys, layout, seed, foreign, radius, local_method):
         else:
             assert np.all(np.isfinite(pose))
             accepted[first] = pose.tolist()
-    outcome, xy, yaw = "refused", None, None
-    if len(accepted) == 1:
-        outcome = "false"
-        if not foreign:
-            ref = read_csv(truth_path)[index]
-            assert abs(ref.t - window[0].t) < 1e-8
-            pose = np.asarray(next(iter(accepted.values())))
-            xy = float(np.linalg.norm(pose[:2] - ref[1:3]))
-            yaw = float(np.rad2deg(abs(wrap(pose[2] - ref.yaw))))
-            if xy <= .25 and yaw <= 10:
-                outcome = "correct"
+    unique = np.asarray(next(iter(accepted.values()))) if len(accepted) == 1 else None
+    outcome, xy, yaw = judge(unique, truth_path, index, window[0].t, foreign)
+    agreement = judge(consensus(accepted.values()), truth_path, index, window[0].t, foreign)
     pairs = list(combinations(np.asarray(list(accepted.values())), 2))
     spread_m = max((np.linalg.norm(a[:2] - b[:2]) for a, b in pairs), default=None)
     spread_deg = max((np.rad2deg(abs(wrap(a[2] - b[2]))) for a, b in pairs), default=None)
     print(json.dumps(dict(layout=layout, seed=seed, foreign=foreign, radius=radius, method=local_method,
-                          spread_m=spread_m, spread_deg=spread_deg,
+                          spread_m=spread_m, spread_deg=spread_deg, consensus=agreement,
                           accepted=accepted, reasons=reasons, outcome=outcome, xy_m=xy, yaw_deg=yaw)))
     assert set(accepted) | set(reasons) == {0, 40, 80, 120, 160}
     assert all(raster is not None for _, raster, _ in sections)
     assert outcome != "false"
     if foreign:
         assert outcome == "refused"
+
+
+def test_duplicate_and_single_displaced_section(tmp_path_factory):
+    sections, scans_in, truth_path = make_survey(tmp_path_factory, "office", 53)
+    _, (pixels, meta), _ = sections[0]
+    x, y, yaw = meta["origin"]
+    shifted = dict(meta, origin=[x + 8, y, yaw])
+    window = scans_in[:51]
+    poses = [estimate_start(window, pixels, header, {}, local_method="keyframes")
+             for header in (meta, shifted)]
+    for name, candidates, expected in (("duplicates", poses, "refused"), ("single", poses[1:], "false")):
+        decision = judge(consensus(candidates), truth_path, 0, window[0].t)
+        print(json.dumps(dict(control=name, candidates=[p.tolist() for p in candidates], consensus=decision)))
+        assert decision[0] == expected
 
 
 def test_heap1_keyframes_on_saved_sections():
