@@ -1,13 +1,14 @@
 """Run both synthetic bags, compare localization to raw odometry, save evidence."""
 import argparse
+from importlib.resources import as_file
 import json
 from pathlib import Path
 import subprocess
-import sys
 from tempfile import TemporaryDirectory
 
-from .demo import generate
+from .demo import PROFILE, generate
 from .metrics import evaluate, read_csv
+from .solve import module_command
 
 
 def run(output):
@@ -15,14 +16,13 @@ def run(output):
     if output.exists():
         raise FileExistsError(f'Choose a new output directory: {output}')
     output.parent.mkdir(parents=True, exist_ok=True)
-    profile = Path(__file__).resolve().parents[1] / 'configs' / 'example.json'
-    with TemporaryDirectory(dir=output.parent) as tmp:
+    with TemporaryDirectory(dir=output.parent) as tmp, as_file(PROFILE) as profile:
         stage = Path(tmp) / 'run'
         stage.mkdir()
         data = stage / 'data'
         generate(data)
         def nav(*args):
-            subprocess.run([sys.executable, '-m', 'mgts_nav', *map(str, args)], check=True)
+            subprocess.run(module_command('mgts_nav', *args), check=True)
         nav('map', data / 'mapping', '--config', profile, '--out', stage / 'map')
         options = [data / 'inspection', '--config', profile, '--initial-file', data / 'initial_pose.json']
         nav('baseline', *options, '--out', stage / 'baseline')

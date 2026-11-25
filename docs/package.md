@@ -42,6 +42,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Рабочие исходники отлича
 
 Для полевого повтора подготовьте запись согласно [руководству HEAP-1](public-data.md). Переменные `$python` и `$archive` задаются при сборке выше. Обработка и проверка могут выполняться непосредственно из ZIP.
 
+Для первого запуска получателю достаточно архива и окружения с установленными зависимостями. Из локального PowerShell передайте путь к ZIP и новому выходному каталогу. Репетиция создаёт обе записи, читает профиль из архива и запускает обход, инспекцию и базовую одометрию из той же версии программы.
+
+```powershell
+$launch = "import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module(sys.argv.pop(1),run_name='__main__',alter_sys=True)"
+& $python -I -c $launch $archive mgts_nav.rehearse out/packed-first-demo
+```
+
 ```powershell
 $launch = "import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module(sys.argv.pop(1),run_name='__main__',alter_sys=True)"
 $d = 'out/heap1-revisit-v2'

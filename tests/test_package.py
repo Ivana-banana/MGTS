@@ -68,6 +68,21 @@ def test_diagnostics_from_zip(tmp_path):
           'pairs, SHA-256', hashlib.sha256(packaged).hexdigest())
 
 
+def test_archived_rehearsal_uses_packaged_profile_and_children(tmp_path):
+    _, payload = build('HEAD')
+    archive = tmp_path / 'runtime.zip'
+    archive.write_bytes(payload)
+    marker = tmp_path / 'unisolated-child'
+    (tmp_path/'sitecustomize.py').write_text(f'from pathlib import Path\nPath({str(marker)!r}).touch()\n')
+    out = tmp_path / 'demo'
+    subprocess.run([sys.executable, '-I', '-c', ZIP_CLI, str(archive), 'mgts_nav.rehearse', str(out)],
+                   env=dict(os.environ, PYTHONPATH=str(tmp_path)), check=True)
+    assert not marker.exists()
+    metrics = json.loads((out/'metrics.json').read_bytes())
+    assert metrics['inspection']['matched_samples'] == 100
+    assert metrics['inspection']['ate_xy_rmse_m'] < metrics['baseline']['ate_xy_rmse_m']
+
+
 def test_reproducible_committed_runtime(tmp_path):
     commit, payload = build('HEAD')
     assert build(commit) == (commit, payload)

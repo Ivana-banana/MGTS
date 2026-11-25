@@ -4,6 +4,7 @@ Run from the checkout with: python -m mgts_nav.demo OUT
 """
 import argparse
 import csv
+from importlib.resources import files
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,7 +15,7 @@ from rosbags.typesys import Stores, get_typestore
 from scipy.spatial.transform import Rotation
 
 
-PROFILE = Path(__file__).resolve().parents[1] / "configs" / "example.json"
+PROFILE = files("mgts_nav").parent / "configs" / "example.json"
 DURATION = {"mapping": 20.0, "inspection": 10.0}
 START_NS = {"mapping": 100_000_000_000, "inspection": 250_000_000_000}
 TOPIC_TYPES = {
