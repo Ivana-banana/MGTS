@@ -82,7 +82,7 @@ FILES = tuple(sorted((
     'tools/__init__.py', 'tools/laser_scan.py', 'tools/repeat_solve.py',
     'tools/native_grid.cpp', 'tools/package_solution.py', 'tools/plot_heap1_drift.py',
     'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
-    'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
+    'tools/post_gap_controls.py', 'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
     *(f'mgts_nav/{name}.py' for name in MODULES),
     *(f'tests/test_{name}.py' for name in TESTS),
 )))
