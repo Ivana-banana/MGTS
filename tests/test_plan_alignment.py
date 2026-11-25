@@ -6,7 +6,8 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from mgts_nav.plan_alignment import register
+from mgts_nav.metrics import Pose
+from mgts_nav.plan_alignment import overlay, register
 from mgts_nav.slam import rotation
 
 
@@ -111,3 +112,15 @@ def test_two_of_three_agreeing_is_too_few_to_name_the_wrong_one():
     assert report['suspects'] == []
     assert any('too few to name' in w for w in report['warnings'])
     assert not any('No majority' in w for w in report['warnings'])
+@pytest.mark.parametrize(('times', 'xs', 'gap', 'samples'), [
+    ([0, 1, 2, 10, 20, 21, 22], [8, 18, 28, 48, 68, 78, 88], None,
+     {15: True, 38: False, 48: True, 58: False, 75: True}),
+    ([0, 1], [8, 88], None, {40: False}),
+    ([0, 1], [8, 88], 1, {40: True}),
+])
+def test_overlay_preserves_time_gaps(times, xs, gap, samples):
+    image = Image.new('RGB', (100, 25), 'gray')
+    poses = [Pose(t, x, 12, 0) for t, x in zip(times, xs)]
+    overlay(image, poses, np.eye(2), np.zeros(2), 1., gap)
+    for x, connected in samples.items():
+        assert image.getpixel((x, 12)) == ((0, 113, 135) if connected else (128, 128, 128))

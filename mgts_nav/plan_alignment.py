@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from .metrics import read_csv
+from .quality import scan_intervals
 from .slam import rotation
 
 
@@ -144,15 +145,25 @@ def register(model, width, height, fit_scale=False, outlier_m=0.25):
     return linear, translation, report
 
 
-def overlay(image, poses, linear, translation, meter):
+def overlay(image, poses, linear, translation, meter, gap_s=None):
     route = np.asarray([(row.x, row.y) for row in poses])
     uv = (route @ linear.T + translation) / meter
     uv[:, 1] = image.height - 1 - uv[:, 1]
     points = [tuple(p) for p in uv]
     draw = ImageDraw.Draw(image)
-    if len(points) > 1:
-        draw.line(points, fill='white', width=7)
-        draw.line(points, fill='#007187', width=4)
+    _, threshold, breaks = scan_intervals(poses, gap_s)
+    if threshold is None:
+        breaks = range(1, len(points))
+    start = 0
+    for stop in [*breaks, len(points)]:
+        segment = points[start:stop]
+        if len(segment) > 1:
+            draw.line(segment, fill='white', width=7)
+            draw.line(segment, fill='#007187', width=4)
+        else:
+            u, v = segment[0]
+            draw.ellipse((u-2, v-2, u+2, v+2), fill='#007187')
+        start = stop
     for (u, v), color in [(points[0], '#147446'), (points[-1], '#b34524')]:
         draw.ellipse((u-5, v-5, u+5, v+5), fill=color, outline='white', width=1)
 
@@ -163,6 +174,7 @@ def main():
     parser.add_argument('landmarks', type=Path)
     parser.add_argument('trajectory', type=Path)
     parser.add_argument('--fit-scale', action='store_true')
+    parser.add_argument('--gap-s', type=float, help='Maximum time between connected poses in seconds')
     parser.add_argument('--outlier-m', type=float, default=0.25,
                         help='landmark disagreement reported as suspect, metres on the plan (default 0.25)')
     parser.add_argument('--out', type=Path, required=True)
@@ -172,7 +184,7 @@ def main():
         with Image.open(args.plan) as source:
             image = source.convert('RGB')
         linear, translation, report = register(model, *image.size, args.fit_scale, args.outlier_m)
-        overlay(image, read_csv(args.trajectory), linear, translation, report['metres_per_pixel'])
+        overlay(image, read_csv(args.trajectory), linear, translation, report['metres_per_pixel'], args.gap_s)
         if args.out.exists():
             raise ValueError(f'Choose a new output directory: {args.out}')
         args.out.parent.mkdir(parents=True, exist_ok=True)
