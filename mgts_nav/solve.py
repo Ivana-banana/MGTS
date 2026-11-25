@@ -14,6 +14,7 @@ from scipy.spatial import ConvexHull, QhullError
 from .bag import check_recording
 from .delayed_start import START_SEARCHES
 from .grid import DEFAULT_RESOLUTION, check_resolution
+from .map_cache import identity, use_or_build
 from .metrics import read_csv
 from .ros_export import export
 from .slam import checked_pose, read_initial_pose
@@ -74,7 +75,8 @@ def suspected_recording_swap(mapping_route, inspection_route):
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
-          start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION, mapping_velocity_prior=False):
+          start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION, mapping_velocity_prior=False,
+          map_cache=None):
     check_resolution(resolution)
     if (zones is None) != (zone_max_gap is None):
         raise ValueError('Supply --zones and --zone-max-gap together')
@@ -87,6 +89,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
     if initial is not None:
         initial = checked_pose(initial)
     output = Path(output)
+    if map_cache is not None and (Path(map_cache).resolve().is_relative_to(output.resolve())
+                                  or output.resolve().is_relative_to(Path(map_cache).resolve())):
+        raise ValueError('Choose disjoint --out and --map-cache directories')
     if output.exists():
         raise FileExistsError(f'Choose a new output directory: {output}')
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +146,13 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             map_flags.extend(['--grid-dll', grid_dll])
         if mapping_visual_pairs:
             map_flags.extend(['--visual-pairs', mapping_visual_pairs])
-        invoke('map', mapping, '--config', profiles / 'mapping.json', '--out', map_dir, *map_flags)
+        def build_map(destination):
+            invoke('map', mapping, '--config', profiles / 'mapping.json', '--out', destination, *map_flags)
+        if map_cache is None:
+            build_map(map_dir)
+        else:
+            key = identity(mapping, profiles / 'mapping.json', mapping_visual_pairs, settings)
+            use_or_build(map_cache, map_dir, key, build_map)
         options = ['--initial', *initial] if initial is not None else []
         if start_search is not None:
             options.extend(['--start-search', start_search])
@@ -151,8 +162,16 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             options.append('--confirm-start')
         if recover:
             options.append('--recover')
-        invoke('localize', inspection, '--config', profiles / 'inspection.json',
-               '--map', map_dir / 'map.yaml', '--out', result, *options)
+        try:
+            invoke('localize', inspection, '--config', profiles / 'inspection.json',
+                   '--map', map_dir / 'map.yaml', '--out', result, *options)
+        except subprocess.CalledProcessError:
+            if map_cache is not None:
+                print(f'Map retained at {map_cache}. Retry the same solve command with '
+                      '--initial-file CONFIRMED_POSE.json in place of the automatic start options.', file=sys.stderr)
+                if __name__ == '__main__':
+                    print(subprocess.list2cmdline(module_command('mgts_nav.solve', *sys.argv[1:])), file=sys.stderr)
+            raise
         summary = json.loads((result / 'summary.json').read_text(encoding='utf-8'))
         # Both methods get the same start, including when it was estimated by scan matching.
         route = result / 'trajectory.csv'
@@ -212,6 +231,7 @@ if __name__ == '__main__':
                        help='Map-frame X and Y in metres, YAW in radians')
     start.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
     parser.add_argument('--out', required=True, type=Path)
+    parser.add_argument('--map-cache', type=Path, help='Build or verify and reuse a completed mapping stage')
     parser.add_argument('--close-loop', action='store_true')
     parser.add_argument('--resolution', type=float, default=DEFAULT_RESOLUTION, help='Grid cell size in metres')
     parser.add_argument('--mapping-velocity-prior', action='store_true',
@@ -227,7 +247,7 @@ if __name__ == '__main__':
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
               args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap,
-              resolution=args.resolution, mapping_velocity_prior=args.mapping_velocity_prior)
+              resolution=args.resolution, mapping_velocity_prior=args.mapping_velocity_prior, map_cache=args.map_cache)
     except KeyboardInterrupt:
         parser.exit(130, 'Interrupted\n')
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
