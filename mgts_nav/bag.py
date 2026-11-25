@@ -177,12 +177,17 @@ def load_config(path):
                 or not point_time['field'].strip() or point_time.get('unit') not in ('s', 'ms', 'us', 'ns')):
             raise ValueError('point_time requires a field name and unit s/ms/us/ns')
         mode = point_time.get('semantics', 'signed')
-        if set(point_time) - {'field', 'unit', 'semantics'} or mode not in ('signed', 'backward', 'absolute'):
-            raise ValueError('point_time supports field, unit and semantics signed/backward/absolute')
+        if set(point_time) - {'field', 'unit', 'semantics', 'motion'} or mode not in ('signed', 'backward', 'absolute'):
+            raise ValueError('point_time supports field, unit, motion and semantics signed/backward/absolute')
         if mode == 'absolute' and point_time['unit'] != 's':
             raise ValueError('Absolute point_time requires float64 seconds on the raw lidar header clock')
-    if point_time is not None and cfg['odom'] is None:
-        raise ValueError('Deskew requires a kinematic odometry topic')
+        motion = point_time.get('motion', 'odom')
+        if motion not in ('odom', 'gyro'):
+            raise ValueError('point_time.motion must be odom or gyro')
+        if motion == 'odom' and cfg['odom'] is None:
+            raise ValueError('Deskew requires a kinematic odometry topic')
+        if motion == 'gyro' and cfg['imu'] is None:
+            raise ValueError('Gyro deskew requires an IMU topic')
     if cfg.get('gravity_level') and cfg['imu'] is None:
         raise ValueError('Gravity leveling requires an IMU topic')
     return cfg
@@ -269,6 +274,8 @@ def scans(path, cfg):
     gap = cfg['max_sync_gap_s']
     clocks = cfg.get('header_offset_s', {})
     level_scans = cfg.get('gravity_level', False)
+    point_time = cfg.get('point_time')
+    gyro_deskew = point_time is not None and point_time.get('motion') == 'gyro'
     with reader(path) as bag:
         conns = connections(bag, cfg)
         motion = {'odom': [], 'imu': []}
@@ -314,8 +321,7 @@ def scans(path, cfg):
             if not len(xyz) and reason is None:
                 reason = 'no_finite_points'
             xyz = xyz @ lidar_rot.as_matrix().T + offset
-            point_time = cfg.get('point_time')
-            if point_time is not None and len(xyz):
+            if point_time is not None and not gyro_deskew and len(xyz):
                 elapsed = point_offsets(m, point_time, finite)
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
                 span = interval_samples(odom[:, 0], begin, end, gap)
@@ -334,6 +340,18 @@ def scans(path, cfg):
                 else:
                     xyz = xyz @ leveling.as_matrix().T
                     origin = leveling.apply(offset)
+            if gyro_deskew and len(xyz):
+                elapsed = point_offsets(m, point_time, finite)
+                begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
+                span = interval_samples(gt, begin, end, gap)
+                if span is None or not np.isfinite(yaw_rate[span]).all():
+                    reason = 'deskew_imu_unavailable'
+                    xyz = xyz[:0]
+                else:
+                    times, rates = gt[span], yaw_rate[span]
+                    yaw = np.r_[0., np.cumsum(np.diff(times) * (rates[:-1] + rates[1:]) / 2)]
+                    poses = np.column_stack((times, np.zeros((len(times), 2)), yaw))
+                    xyz = deskew_points(xyz, elapsed, t, poses, gap)
             low, high = cfg['height_band_m']
             xy = xyz[(xyz[:, 2] >= low) & (xyz[:, 2] <= high), :2]
             if len(xyz) and not len(xy):
