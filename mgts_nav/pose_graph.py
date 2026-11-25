@@ -57,3 +57,48 @@ def adjust(trajectory, endpoint_measurement):
         adjusted[i, :2] = world(delta[:2], poses[i])
     adjusted[:, 2] += interp[:, 2]
     return adjusted
+
+def adjust_internal(trajectory, events):
+    """Fit sparse keyframes using independent loop pairs with bounded influence."""
+    poses = np.asarray(trajectory)
+    pairs = []
+    for edge in sorted(events, key=lambda event: -event['overlap']):
+        a, b = edge['first'], edge['second']
+        if any(abs(a-old['first']) <= 10 and abs(b-old['second']) <= 10 for old in pairs):
+            continue
+        innovation = relative(poses[a], poses[b]) - edge['measured']
+        if np.linalg.norm(innovation[:2]) <= .45 and abs(np.arctan2(np.sin(innovation[2]),np.cos(innovation[2]))) <= .2:
+            pairs.append(edge)
+    if not pairs:
+        return poses.copy(), []
+    indices = np.unique([*range(0,len(poses),5),len(poses)-1,
+                         *(e[k] for e in pairs for k in ('first','second'))])
+    base = poses[indices].copy()
+    base[:,2] = np.unwrap(base[:,2])
+    a = list(range(len(base)-1))
+    b = list(range(1,len(base)))
+    measurements = [relative(base[i],base[j]) for i,j in zip(a,b)]
+    for edge in pairs:
+        a.append(np.searchsorted(indices,edge['first']))
+        b.append(np.searchsorted(indices,edge['second']))
+        measurements.append(edge['measured'])
+    a,b = np.array(a),np.array(b)
+    def residual(flat):
+        candidate = np.vstack((base[0],flat.reshape(-1,3)))
+        delta = candidate[b] - candidate[a]
+        c,s = np.cos(candidate[a,2]),np.sin(candidate[a,2])
+        step = np.column_stack((c*delta[:,0]+s*delta[:,1], -s*delta[:,0]+c*delta[:,1],delta[:,2]))
+        err = step-measurements
+        err[:,2] = np.arctan2(np.sin(err[:,2]),np.cos(err[:,2]))
+        return (err/[.06,.06,.04]).ravel()
+    mask = lil_matrix((3*len(a),3*(len(base)-1)),dtype=int)
+    for i,(left,right) in enumerate(zip(a,b)):
+        for node in (left,right):
+            if node:
+                mask[3*i:3*i+3,3*(node-1):3*node] = 1
+    fit = least_squares(residual,base[1:].ravel(),jac_sparsity=mask.tocsr(),loss='soft_l1',max_nfev=60)
+    correction = np.vstack((base[0],fit.x.reshape(-1,3))) - base
+    if not fit.success or np.max(np.linalg.norm(correction[:,:2],axis=1)) > .5 or np.max(abs(correction[:,2])) > .25:
+        return poses.copy(), []
+    delta = np.column_stack([np.interp(np.arange(len(poses)),indices,col) for col in correction.T])
+    return poses + delta, pairs

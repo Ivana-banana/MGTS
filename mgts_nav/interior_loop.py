@@ -92,6 +92,7 @@ def search(stream, rows, *, stride=5, history=64, budget=64):
                 counts['ambiguous_translation'] += 1
                 continue
             events.append(dict(first=old_i, second=index, t0=old_t, t1=t,
+                               measured=diag['measured_first_from_last'],
                                overlap=diag['symmetric_overlap'], separation_m=diag['geometric_distance_m']))
         if len(saved) == history:
             counts['evicted'] += 1

@@ -123,6 +123,20 @@ def run(args, output):
                   f'rejections={json.dumps(rejections["counts"])}')
         if not map_counts['origin']:
             raise ValueError(f'No usable scan initialized the map: {detail}')
+        if getattr(args, 'internal_loops', False):
+            from .interior_loop import search
+            from .pose_graph import adjust_internal
+            rows = (dict(t=r.t, x=r.pose[0], y=r.pose[1], yaw=r.pose[2], status=r.status) for r in estimates)
+            report = search(scans(args.bag, cfg), rows)
+            poses, selected = adjust_internal([r.pose for r in estimates], report['candidates'])
+            report['selected'] = selected
+            if selected:
+                grid = grid_factory(args.resolution)
+                for scan, row, pose in zip(scans(args.bag, cfg), estimates, poses, strict=True):
+                    row.pose = pose
+                    if row.status != 'prediction_only':
+                        grid.observe(world(scan.origin, pose), world(scan.xy, pose))
+            (output / 'internal-loops.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         if args.close_loop:
             from .loop import diagnose
             from .pose_graph import adjust
@@ -217,7 +231,9 @@ def main():
                            help='Predict mapping translation from two matches when odometry is missing')
             p.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS native occupancy-grid DLL')
             p.add_argument('--resolution', default=DEFAULT_RESOLUTION, type=float, help='Grid cell size in metres')
-            p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
+            loops = p.add_mutually_exclusive_group()
+            loops.add_argument('--internal-loops', action='store_true', help='Experimentally correct supported internal mapping revisits')
+            loops.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')
             group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'),
