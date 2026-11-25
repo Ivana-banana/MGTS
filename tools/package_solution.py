@@ -36,7 +36,7 @@ TESTS = (
     'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones',
 )
 FILES = tuple(sorted((
-    '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'pytest.ini',
+    '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'requirements-win-amd64-py310.lock', 'pytest.ini',
     'configs/demo-zones.json', 'configs/example.json', 'configs/inspection.rviz', 'docs/ambiguity.md',
     'docs/angular-recovery-controls.md', 'docs/camera-diagnosis.csv', 'docs/camera-diagnosis.md',
     'docs/camera-experiment.md', 'docs/clock-offset.md', 'docs/coarse-corridor.md',
