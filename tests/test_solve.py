@@ -19,6 +19,13 @@ def test_invalid_pose_file_names_path(tmp_path, content):
         read_initial_pose(path)
 
 
+@pytest.mark.parametrize('resolution', [0.009, 1.01, float('nan'), float('inf')])
+def test_invalid_resolution_rejected_before_bags(tmp_path, resolution):
+    with pytest.raises(ValueError, match='resolution'):
+        solve('unused', 'unused', PROFILE, tmp_path/'result', resolution=resolution)
+    assert not (tmp_path/'result').exists()
+
+
 def test_nonfinite_start_rejected_before_bags(tmp_path):
     with pytest.raises(ValueError, match='finite x, y, yaw'):
         solve('unused', 'unused', PROFILE, tmp_path/'result', initial=[1, 2, float('nan')])

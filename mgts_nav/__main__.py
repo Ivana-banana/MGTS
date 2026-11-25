@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from .bag import inspect_bag, load_config, scans
-from .grid import Grid, preview, read_map
+from .grid import DEFAULT_RESOLUTION, Grid, preview, read_map
 from .slam import checked_pose, read_initial_pose, relative, track, world
 
 
@@ -196,7 +196,7 @@ def main():
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
         if name == 'map':
             p.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS native occupancy-grid DLL')
-            p.add_argument('--resolution', default=0.08, type=float, help='Grid cell size in metres')
+            p.add_argument('--resolution', default=DEFAULT_RESOLUTION, type=float, help='Grid cell size in metres')
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')

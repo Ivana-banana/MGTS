@@ -18,6 +18,8 @@ AMD Ryzen 5 5500U, 12 логических процессоров, Windows 10 bu
 
 ## Воспроизведение
 
+В полном прогоне `python -m mgts_nav.solve` размер клетки задаёт `--resolution` в метрах. Например, `--resolution 0.05` строит карту с клеткой 5 см и использует её для инспекции и экспорта RViz. По умолчанию клетка равна 8 см. Допустимый диапазон составляет от 0,01 до 1 м включительно. Итоговое значение сохраняется в `map/map.yaml` и попадает в манифест как `parameters.map_resolution_m`.
+
 ```powershell
 python -m mgts_nav.demo out/runtime-data
 python -m mgts_nav.benchmark out/runtime-data
