@@ -29,15 +29,10 @@ class PreparedWindow:
     rows: list[Scan]
     local: list[np.ndarray]
     rejection: str | None = None
+    rejected_pair: dict | None = None
 
 
 def _local_trajectory(rows, local_method):
-    if len(rows) < 21:
-        raise ValueError('Need at least three global search slots')
-    for previous, current in zip(rows, rows[1:]):
-        dt = current.t - previous.t
-        if not 0 < dt <= .35 or min(len(previous.xy), len(current.xy)) < 12:
-            raise ValueError('Gap in the local scan chain')
     if local_method == 'keyframes':
         stripped = (replace(scan, odom=None, gyro_delta=scan.gyro_delta if i else None)
                     for i, scan in enumerate(rows))
@@ -62,6 +57,19 @@ def _local_trajectory(rows, local_method):
 def prepare_window(window, *, local_method='pairwise'):
     """Compute motion once, including a repeatable rejection for an unusable window."""
     rows = list(islice(window, MAX_WINDOW_SCANS))
+    if len(rows) < 21:
+        return PreparedWindow(rows, [], 'Need at least three global search slots')
+    for i, (previous, current) in enumerate(zip(rows, rows[1:])):
+        dt = current.t - previous.t
+        causes = []
+        if not 0 < dt <= .35:
+            causes.append('time_interval')
+        if min(len(previous.xy), len(current.xy)) < 12:
+            causes.append('too_few_points')
+        if causes:
+            pair = dict(indices=[i, i+1], times_s=[previous.t, current.t], interval_s=dt,
+                        points=[len(previous.xy), len(current.xy)], causes=causes)
+            return PreparedWindow(rows, [], 'Gap in the local scan chain', pair)
     try:
         local = _local_trajectory(rows, local_method)
     except ValueError as exc:
@@ -78,6 +86,8 @@ def estimate_prepared(prepared, pixels, meta, stats):
     """Match one map with an already evaluated local scan chain."""
     stats['anchors'] = []
     if prepared.rejection is not None:
+        if prepared.rejected_pair is not None:
+            stats['rejected_pair'] = prepared.rejected_pair
         raise ValueError(prepared.rejection)
     rows, local = prepared.rows, prepared.local
     stats['local_end'] = local[-1].tolist()
