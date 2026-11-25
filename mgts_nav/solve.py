@@ -52,6 +52,10 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         profiles.mkdir()
         shutil.copyfile(profile, profiles / 'mapping.json')
         shutil.copyfile(inspection_profile or profile, profiles / 'inspection.json')
+        if mapping_visual_pairs is not None:
+            mapping_visual_pairs = shutil.copyfile(mapping_visual_pairs, profiles / 'mapping-pairs.jsonl')
+        if inspection_visual_pairs is not None:
+            inspection_visual_pairs = shutil.copyfile(inspection_visual_pairs, profiles / 'inspection-pairs.jsonl')
         if zones is not None:
             shutil.copyfile(zones, profiles / 'zones.json')
             polygons = load_zones(profiles / 'zones.json')
