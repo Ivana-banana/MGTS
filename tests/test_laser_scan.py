@@ -47,3 +47,79 @@ def test_convert_scan_timing_and_map(tmp_path):
     subprocess.run([sys.executable, '-m', 'mgts_nav', 'map', dst, '--config', profile, '--out', output],
                    check=True)
     assert json.loads((output / 'summary.json').read_bytes())['scans'] == 10
+
+def write_office_scans(source, output):
+    """Place planar office returns in the generator's original angular bins."""
+    from mgts_nav.demo import ANGLES
+
+    store = get_typestore(Stores.ROS2_HUMBLE)
+    step = 2 * np.pi / len(ANGLES)
+    scan_type = 'sensor_msgs/msg/LaserScan'
+    with reader(source) as bag, Writer(output, version=8) as writer:
+        targets = {c.id: writer.add_connection(
+            c.topic, scan_type if c.msgtype.endswith('/PointCloud2') else c.msgtype, typestore=store)
+            for c in bag.connections}
+        for c, t, raw in bag.messages():
+            target = targets[c.id]
+            if target.msgtype == scan_type:
+                msg = bag.deserialize(raw, c.msgtype)
+                x, y = cloud_xyz(msg)[:, :2].T
+                bins = np.rint((np.arctan2(y, x) - ANGLES[0]) / step).astype(int) % len(ANGLES)
+                ranges = np.full(len(ANGLES), np.inf, dtype=np.float32)
+                ranges[bins] = np.hypot(x, y)
+                scan = store.types[scan_type](msg.header, ANGLES[0], ANGLES[-1], step, .0002, .1,
+                                              .05, 20., ranges, np.empty(0, dtype=np.float32))
+                raw = store.serialize_cdr(scan, scan_type)
+            writer.write(target, t, raw)
+
+
+def test_ros1_laser_scan_through_solve(tmp_path):
+    import hashlib
+    from itertools import zip_longest
+
+    from mgts_nav.demo import PROFILE, generate
+
+    def cli(*args):
+        subprocess.run([sys.executable, '-X', 'utf8', '-m', *map(str, args)], check=True)
+
+    office = tmp_path / 'office'
+    generate(office, seed=41)
+    inputs = [[], []]
+    for role in ('mapping', 'inspection'):
+        reference = tmp_path / f'{role}-ros2'
+        original = tmp_path / f'{role}.bag'
+        restored = tmp_path / f'{role}-converted'
+        write_office_scans(office / role, reference)
+        cli('rosbags.convert', '--src', reference, '--dst', original, '--dst-typestore', 'ros1_noetic')
+        original_bytes = original.read_bytes()
+        assert original_bytes.startswith(b'#ROSBAG V2.0\n')
+        cli('rosbags.convert', '--src', original, '--dst', restored, '--dst-typestore', 'ros2_humble')
+        # All CDR fields and both clocks must survive the round trip, including skipped beams.
+        with reader(reference) as before, reader(restored) as after, reader(original) as ros1:
+            for a, b, c in zip_longest(before.messages(), after.messages(), ros1.messages()):
+                assert a is not None and b is not None and c is not None
+                assert a[0].topic == b[0].topic == c[0].topic
+                assert a[1] == b[1] == c[1] and a[2] == b[2]
+                if a[0].msgtype.endswith('/LaserScan'):
+                    scan = before.deserialize(a[2], a[0].msgtype)
+                    old = ros1.deserialize(c[2], c[0].msgtype)
+                    assert old.header.stamp == scan.header.stamp and old.header.frame_id == scan.header.frame_id
+                    np.testing.assert_array_equal(old.ranges, scan.ranges)
+                    assert old.time_increment == scan.time_increment
+        for index, src in enumerate((reference, restored)):
+            dst = tmp_path / f'{role}-cloud-{index}'
+            cli('tools.laser_scan', src, '/demo/cloud', dst)
+            inputs[index].append(dst)
+        assert original.read_bytes() == original_bytes
+
+    products = []
+    for index, bags in enumerate(inputs):
+        output = tmp_path / f'solve-{index}'
+        cli('mgts_nav.solve', *bags, '--config', PROFILE, '--out', output)
+        assert json.loads((output/'inspection/summary.json').read_bytes())['status'] == {'matched': 100}
+        products.append(output)
+    for name in ('map/map.pgm', 'map/map.yaml', 'map/trajectory.csv', 'inspection/trajectory.csv',
+                 'inspection/summary.json', 'inspection/continuous.csv', 'baseline/trajectory.csv'):
+        left, right = [(out/name).read_bytes() for out in products]
+        assert left == right, name
+        print(name, hashlib.sha256(left).hexdigest())
