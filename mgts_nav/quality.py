@@ -5,8 +5,8 @@ from statistics import median
 import numpy as np
 
 
-def inspection_quality(estimates):
-    """Summarize the scan-rate output of track(); no reference poses are used."""
+def scan_intervals(estimates):
+    """Return successive intervals, the gap threshold and indices following gaps."""
     times = np.asarray([row.t for row in estimates], dtype=float)
     if not len(times) or not np.isfinite(times).all():
         raise ValueError('Inspection needs finite scan timestamps')
@@ -16,11 +16,16 @@ def inspection_quality(estimates):
 
     # Gaps have no rows. Report them independently of consecutive rejected scans.
     gap_threshold = 3 * float(np.median(intervals)) if len(intervals) >= 2 else None
-    gaps = []
-    if gap_threshold is not None:
-        for i in np.flatnonzero(intervals > gap_threshold):
-            gaps.append(dict(start_s=float(times[i]), end_s=float(times[i+1]),
-                             duration_s=float(intervals[i])))
+    ends = np.flatnonzero(intervals > gap_threshold) + 1 if gap_threshold is not None else []
+    return intervals, gap_threshold, ends
+
+
+def inspection_quality(estimates):
+    """Summarize the scan-rate output of track(); no reference poses are used."""
+    intervals, gap_threshold, ends = scan_intervals(estimates)
+    times = [row.t for row in estimates]
+    gaps = [dict(start_s=float(times[i-1]), end_s=float(times[i]),
+                 duration_s=float(intervals[i-1])) for i in ends]
 
     support = []
     losses = []

@@ -7,6 +7,8 @@ import numpy as np
 import yaml
 from PIL import Image, ImageDraw
 
+from .quality import scan_intervals
+
 
 DEFAULT_RESOLUTION = 0.08
 
@@ -114,9 +116,14 @@ def preview(path, output, trajectory):
     coords[:, 1] = len(pixels) - 1 - coords[:, 1]
     image = Image.fromarray(pixels).convert('RGB')
     draw = ImageDraw.Draw(image)
+    _, _, gap_ends = scan_intervals(trajectory)
+    gap_ends = set(gap_ends)
     for i, p in enumerate(coords[1:], 1):
         color = '#dd7800' if trajectory[i].status == 'prediction_only' else '#0074b8'
-        draw.line([tuple(coords[i-1]), tuple(p)], fill=color, width=2)
+        if i in gap_ends:
+            draw.point(tuple(p), fill=color)
+        else:
+            draw.line([tuple(coords[i-1]), tuple(p)], fill=color, width=2)
     for p, color in [(coords[0], '#18803a'), (coords[-1], '#cc263b')]:
         x, y = p
         draw.ellipse([x-2, y-2, x+2, y+2], fill=color)
