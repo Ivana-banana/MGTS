@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from tools.package_solution import FILES, build, verify
+from tools.package_solution import build, revision_files, verify
 
 
 ZIP_CLI = """
@@ -130,10 +130,9 @@ def test_reproducible_committed_runtime(tmp_path):
     assert build(commit) == (commit, payload)
     archive = tmp_path / 'candidate.zip'
     archive.write_bytes(payload)
-    verify(archive, hashlib.sha256(payload).hexdigest())
+    verify(archive, hashlib.sha256(payload).hexdigest(), revision_files(commit))
     with zipfile.ZipFile(archive) as result:
         names = result.namelist()
-        assert tuple(names) == FILES
         assert {'mgts_nav/image_pairs.py', 'docs/image-pairs.md'} <= set(names)
         assert {name for name in names if name.startswith('configs/')} == {
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
