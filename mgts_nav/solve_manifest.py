@@ -57,6 +57,7 @@ def digest(path):
 
 
 def fingerprints(mapping, inspection, solution):
+    mapping, inspection, solution = (Path(p).resolve() for p in (mapping, inspection, solution))
     result = {}
     for role, bag in (("mapping", mapping), ("inspection", inspection)):
         for path in bag_files(bag):
@@ -105,7 +106,7 @@ def main(argv=None):
         if action == "create":
             command.add_argument("--solve-revision", help="Known version of the code used for this solve")
     args = parser.parse_args(argv)
-    mapping, inspection, solution = (p.resolve() for p in (args.mapping, args.inspection, args.solution))
+    mapping, inspection, solution = args.mapping, args.inspection, args.solution
     try:
         actual = fingerprints(mapping, inspection, solution)
         if args.action == "create":
