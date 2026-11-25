@@ -63,6 +63,7 @@ FILES = tuple(sorted((
     'docs/scan-pair-overlap.md', 'docs/scan-rejections.md', 'docs/self-check.md', 'docs/sensors.md', 'docs/solve-audit.md',
     'docs/solve-manifest.md', 'docs/start-confirmation.md', 'docs/submap-search-profile.md',
     'docs/submap-start-controls.md', 'docs/visit-agreement.md', 'docs/zones.md',
+    'docs/tum-visual-yaw.md',
     'tools/angular_recovery_controls.py', 'tools/benchmark_grid_memory.py', 'tools/benchmark_length.py',
     'tools/benchmark_native_grid.py', 'tools/diagnose_camera.py', 'tools/evaluate_camera.py',
     'tools/delayed_after_gap.py', 'tools/evaluate_deskew.py', 'tools/evaluate_false_visits.py', 'tools/evaluate_joint_outage.py',
@@ -83,6 +84,7 @@ FILES = tuple(sorted((
     'tools/native_grid.cpp', 'tools/package_solution.py', 'tools/plot_heap1_drift.py',
     'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
     'tools/post_gap_controls.py', 'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
+    'tools/tum_visual_yaw.py',
     *(f'mgts_nav/{name}.py' for name in MODULES),
     *(f'tests/test_{name}.py' for name in TESTS),
 )))
