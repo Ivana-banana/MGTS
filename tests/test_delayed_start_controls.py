@@ -95,7 +95,7 @@ def test_recorded_windows(maps, layout, seed, index, radius, foreign, local_meth
         assert result == ('refused' if foreign or radius is not None else 'correct')
 
 
-def test_symmetric_moving_window(local_method):
+def symmetric_window(count):
     # Rectangular walls give identical ranges along the half-turned trajectory.
     pixels = np.full((31, 151), 254, dtype=np.uint8)
     pixels[[0, -1], :] = 0
@@ -104,12 +104,66 @@ def test_symmetric_moving_window(local_method):
     angles = np.arange(240) * (2*np.pi / 240)
     body = np.column_stack((np.cos(angles), np.sin(angles)))
     window = []
-    for i in range(51):
+    for i in range(count):
         position = np.array([4.25 + .04*i, 1.15 + .005*i])
         rays = body @ rotation(.29).T
         walls = np.where(rays > 0, [15.05, 3.05], [.05, .05])
         distance = ((walls - position) / rays).min(axis=1)
         window.append(Scan(.1*i, body * distance[:, None], np.zeros(2), None, 0.))
+    return window, pixels, meta
+
+
+def test_symmetric_moving_window(local_method):
+    window, pixels, meta = symmetric_window(51)
     pose, report = estimate(window, pixels, meta, local_method)
     print(json.dumps(dict(layout="rectangle", result="refused" if pose is None else "false", **report)))
     assert pose is None
+
+
+@pytest.mark.parametrize('gap', [False, True])
+def test_after_gap_office(maps, local_method, gap):
+    from tools.delayed_after_gap import search
+    pixels, meta, stream, truth_path, points = maps['office', 17]
+    supplied = stream[:2] + stream[8:] if gap else stream
+    report, tracked = search(supplied, pixels, meta, points, local_method)
+    rows = list(tracked)
+    truth = {p.t: p for p in read_csv(truth_path)}
+    assert report['attempts'][0]['start_index'] == 0
+    if gap:
+        assert report['attempts'][0]['reason'] == 'Gap in the local scan chain'
+        assert report['attempts'][1]['first_t'] == stream[8].t
+    assert report['uncovered_t'] + [r.t for r in rows] == [s.t for s in supplied]
+    if rows:
+        first = stream[8 if gap else 0]
+        assert report['start_t'] == rows[0].t == first.t
+        delta = relative(np.array(truth[first.t][1:]), np.array(report['start']))
+        xy, yaw = np.linalg.norm(delta[:2]), abs(np.rad2deg(delta[2]))
+        assert xy <= .25 and yaw <= 10
+        result = evaluate([Pose(r.t, *r.pose) for r in rows], [truth[r.t] for r in rows])
+        print(local_method, gap, report['start_t'], len(rows), sum(r.status == 'matched' for r in rows),
+              'XY/yaw/ATE', xy, yaw, result['ate_xy_rmse_m'])
+    else:
+        print(local_method, gap, report['attempts'])
+    if local_method == 'keyframes':
+        assert rows
+
+
+def test_after_gap_symmetric(local_method):
+    from tools.delayed_after_gap import search
+    window, pixels, meta = symmetric_window(65)
+    supplied = window[:2] + window[8:]
+    report, rows = search(supplied, pixels, meta, np.empty((0, 2)), local_method)
+    assert report['outcome'] == 'refused' and not list(rows)
+    assert report['uncovered_t'] == [s.t for s in supplied]
+    assert len(report['attempts']) == 2
+    print(local_method, 'symmetric', report['attempts'])
+
+
+def test_after_gap_stops_after_three_broken_windows():
+    from tools.delayed_after_gap import search
+    window, pixels, meta = symmetric_window(65)
+    supplied = [replace(s, t=float(i)) for i, s in enumerate(window)]
+    report, rows = search(supplied, pixels, meta, np.empty((0, 2)), 'pairwise')
+    assert [a['start_index'] for a in report['attempts']] == [0, 1, 2]
+    assert all(a['rejected_pair']['causes'] == ['time_interval'] for a in report['attempts'])
+    assert not list(rows) and len(report['uncovered_t']) == 65

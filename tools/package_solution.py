@@ -65,7 +65,7 @@ FILES = tuple(sorted((
     'docs/submap-start-controls.md', 'docs/visit-agreement.md', 'docs/zones.md',
     'tools/angular_recovery_controls.py', 'tools/benchmark_grid_memory.py', 'tools/benchmark_length.py',
     'tools/benchmark_native_grid.py', 'tools/diagnose_camera.py', 'tools/evaluate_camera.py',
-    'tools/evaluate_deskew.py', 'tools/evaluate_false_visits.py', 'tools/evaluate_joint_outage.py',
+    'tools/delayed_after_gap.py', 'tools/evaluate_deskew.py', 'tools/evaluate_false_visits.py', 'tools/evaluate_joint_outage.py',
     'tools/evaluate_leveling.py', 'tools/evaluate_lidar_extrinsics.py', 'tools/evaluate_micrometre.py',
     'tools/evaluate_motion_disagreement.py', 'tools/evaluate_visit_agreement.py',
     'tools/evaluate_zone_visits.py', 'tools/heap1_clock_lag.py', 'tools/heap1_drift.py',
