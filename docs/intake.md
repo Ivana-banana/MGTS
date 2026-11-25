@@ -56,6 +56,20 @@ python -m mgts_nav.solve data/mapping data/inspection --config configs/official-
 
 ### Развилки при неизвестной схеме
 
+Если для лидара есть паспортная калибровка, а поворот IMU относительно корпуса неизвестен, можно проверить профиль на той же записи с отключённой IMU. Пример PowerShell использует переменные `$draft` (JSON из mgts_nav.profile), `$xyz` и `$xyzw` из паспорта именно этого лидара, `$profile` (новый путь JSON) и `$bag` (путь записи). Сверьте кадры, единицы, высотную полосу и предел интерполяции для своей записи.
+
+```powershell
+$cfg = (Get-Content -Raw -Encoding utf8 $draft | ConvertFrom-Json).profile
+$cfg.base_from_lidar_xyz_m = $xyz
+$cfg.base_from_lidar_xyzw = $xyzw
+$cfg.imu = $null
+$cfg.PSObject.Properties.Remove('imu_frame')
+$cfg.PSObject.Properties.Remove('base_from_imu_xyzw')
+$cfg.stationary_s = 0
+[IO.File]::WriteAllText($profile, ($cfg | ConvertTo-Json -Depth 10))
+python -m mgts_nav.sync $bag --config $profile
+```
+
 Для репетиции с внешней схемой используйте пример [адаптера лидара](../tools/custom_lidar.py). Тип [Packet.msg](../configs/custom_lidar/Packet.msg) содержит заголовок, единицы и массив [Return.msg](../configs/custom_lidar/Return.msg). Команда принимает каталог ROS 2 bag с CDR и сохранённым хешем типа. Поля forward, left, up в миллиметрах кадра lidar_flu переходят в x, y, z в метрах. Адаптер сохраняет header.stamp и время записи отдельно и пишет выбранный поток в новый bag. Для сообщения организаторов потребуется его собственная схема и подтверждённое соответствие полей.
 
 ```powershell
