@@ -13,11 +13,20 @@ from scipy.ndimage import gaussian_filter, map_coordinates
 from scipy.spatial.transform import Rotation
 
 from mgts_nav.camera_demo import BASE_FROM_CAMERA
-from mgts_nav.image_pairs import compressed_gray, features, tracks
+from mgts_nav.image_pairs import compressed_gray, features, gray, tracks
 from mgts_nav.vision import estimate
 
 
-@pytest.mark.parametrize('angle,encoding,codec', [(2., 'rgb8', None), (-2., 'bgr8', None), (0., 'mono8', None),
+@pytest.mark.parametrize('dtype', ['<u2', '>u2'])
+def test_mono16_intensity_with_odd_stride(dtype):
+    samples = np.arange(121, dtype=np.uint16).reshape(11, 11) * 541
+    data = np.pad(samples.astype(dtype).view('u1'), ((0, 0), (0, 1)), constant_values=255)
+    msg = SimpleNamespace(encoding='mono16', width=11, height=11, step=23,
+                          data=data.ravel(), is_bigendian=dtype.startswith('>'))
+    np.testing.assert_array_equal(gray(msg), samples / 257.)
+
+
+@pytest.mark.parametrize('angle,encoding,codec', [(2., 'mono16', None), (-2., 'mono16', None), (2., 'rgb8', None), (-2., 'bgr8', None), (0., 'mono8', None),
                                                   (2., 'rgb8', 'PNG'), (2., 'rgb8', 'JPEG'),
                                                   (-2., 'mono8', 'PNG'), (0., 'mono8', 'JPEG')])
 def test_image_bag_to_rotation(tmp_path, angle, encoding, codec):
@@ -43,7 +52,7 @@ def test_image_bag_to_rotation(tmp_path, angle, encoding, codec):
             header = types['std_msgs/msg/Header'](types['builtin_interfaces/msg/Time'](8, i * 50000000),
                                                   'optical')
             raster = frame.astype(np.uint8)
-            if encoding != 'mono8':
+            if encoding in ('rgb8', 'bgr8'):
                 raster = np.stack((raster, raster // 2, raster), axis=-1)
             if codec:
                 originals.append(features(raster.astype(float) if raster.ndim == 2
@@ -53,8 +62,12 @@ def test_image_bag_to_rotation(tmp_path, angle, encoding, codec):
                 msg = types[conn.msgtype](header, f'{encoding}; {codec.lower()} compressed',
                                           np.frombuffer(buf.getvalue(), dtype=np.uint8))
             else:
-                padded = np.pad(raster.reshape(h, -1), ((0, 0), (0, 4)))
-                msg = types[conn.msgtype](header, h, w, encoding, 0, padded.shape[1], padded.ravel())
+                big_endian = encoding == 'mono16' and angle < 0
+                if encoding == 'mono16':
+                    # Use different high and low bytes to exercise byte order.
+                    raster = (raster.astype('u2') * 256).astype('>u2' if big_endian else '<u2').view('u1')
+                padded = np.pad(raster.reshape(h, -1), ((0, 0), (0, 3)))
+                msg = types[conn.msgtype](header, h, w, encoding, int(big_endian), padded.shape[1], padded.ravel())
             writer.write(conn, 10000000000 + i * 50000000, store.serialize_cdr(msg, conn.msgtype))
     calibration = tmp_path / 'camera.json'
     calibration.write_text(json.dumps(dict(K=k.tolist(), base_from_camera_xyzw=BASE_FROM_CAMERA,

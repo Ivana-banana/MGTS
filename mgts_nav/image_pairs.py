@@ -15,14 +15,17 @@ from .bag import reader, stamp
 
 
 def gray(msg):
-    channels = {'mono8': 1, 'rgb8': 3, 'bgr8': 3}.get(msg.encoding)
-    if channels is None:
+    bytes_per_pixel = {'mono8': 1, 'mono16': 2, 'rgb8': 3, 'bgr8': 3}.get(msg.encoding)
+    if bytes_per_pixel is None:
         raise ValueError(f'Unsupported image encoding {msg.encoding!r}')
     w, h = msg.width, msg.height
-    if min(w, h) < 11 or msg.step < w * channels or len(msg.data) != h * msg.step:
+    if min(w, h) < 11 or msg.step < w * bytes_per_pixel or len(msg.data) != h * msg.step:
         raise ValueError('Invalid image dimensions, stride or data length')
-    pixels = np.frombuffer(msg.data, dtype=np.uint8).reshape(h, msg.step)[:, :w * channels]
-    if channels == 1:
+    pixels = np.frombuffer(msg.data, dtype=np.uint8).reshape(h, msg.step)[:, :w * bytes_per_pixel]
+    if msg.encoding == 'mono16':
+        dtype = '>u2' if msg.is_bigendian else '<u2'
+        return pixels.view(dtype).astype(float) / 257.
+    if msg.encoding == 'mono8':
         return pixels.astype(float)
     rgb = pixels.reshape(h, w, 3)
     return (rgb if msg.encoding == 'rgb8' else rgb[:, :, ::-1]) @ [0.299, 0.587, 0.114]
