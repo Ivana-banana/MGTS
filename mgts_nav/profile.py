@@ -28,6 +28,19 @@ def draft_profile(path, *, lidar=None, imu=None, odom=None, base=None, tf_topic=
             available = sorted({topic for topic, typ in inventory if typ == msgtype})
             candidates[key] = available
             topic = selected[key]
+            if key == 'lidar' and not available:
+                scans = [name for name, typ in inventory if typ == 'sensor_msgs/msg/LaserScan']
+                if scans:
+                    guide = 'docs/intake.md' if bag.is2 else 'docs/ros1-validation.md'
+                    first = '' if bag.is2 else 'First convert the ROS 1 bag to ROS 2 with rosbags.convert. '
+                    hint = (f'LaserScan topics: {scans}. {first}Choose the navigation scan and convert '
+                            f'its ROS 2 topic with tools.laser_scan, then run mgts_nav.profile on the '
+                            f'new PointCloud2 recording. See {guide} for commands.')
+                    if topic is not None:
+                        raise ValueError(f'No {msgtype} on {topic}. {hint}')
+                    config.update(lidar=None, lidar_frame=None)
+                    questions.append(hint)
+                    continue
             if topic is not None and topic not in available:
                 raise ValueError(f'No {msgtype} on {topic}; candidates: {available}')
             if topic is None and len(available) == 1:

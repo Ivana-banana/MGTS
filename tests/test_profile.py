@@ -100,3 +100,36 @@ def test_full_frame_verification_within_one_connection(tmp_path, change):
     else:
         assert config['lidar_frame'] is None and config['base_from_lidar_xyz_m'] is None
         assert result['observed_frames']['/lidar']['header_frame_ids'] == ['body', 'second_sensor']
+
+@pytest.mark.parametrize('ros1,topics', [(False, ['/scan']), (True, ['/rear', '/front'])])
+def test_profile_guides_laser_scan_conversion(tmp_path, ros1, topics):
+    from rosbags.rosbag1 import Writer as Ros1Writer
+
+    bag = tmp_path / ('original.bag' if ros1 else 'original')
+    store = get_typestore(Stores.ROS1_NOETIC if ros1 else Stores.ROS2_HUMBLE)
+    with (Ros1Writer(bag) if ros1 else Writer(bag, version=8)) as writer:
+        for topic in topics:
+            writer.add_connection(topic, 'sensor_msgs/msg/LaserScan', typestore=store)
+    cmd = [sys.executable, '-m', 'mgts_nav.profile', str(bag)]
+    report = json.loads(subprocess.check_output(cmd))
+    assert report['profile']['lidar'] is None and report['candidates']['lidar'] == []
+    hint, = [line for line in report['questions'] if 'tools.laser_scan' in line]
+    assert all(topic in hint for topic in topics)
+    assert ('rosbags.convert' in hint) == ros1
+    assert ('docs/ros1-validation.md' if ros1 else 'docs/intake.md') in hint
+    explicit = subprocess.run([*cmd, '--lidar', topics[0]], capture_output=True, text=True)
+    assert explicit.returncode == 2 and hint in explicit.stderr
+
+
+def test_profile_prefers_existing_cloud_with_laser_scan(tmp_path):
+    store = get_typestore(Stores.ROS2_HUMBLE)
+    with Writer(tmp_path/'mixed', version=8) as writer:
+        writer.add_connection('/scan', 'sensor_msgs/msg/LaserScan', typestore=store)
+        cloud = writer.add_connection('/points', 'sensor_msgs/msg/PointCloud2', typestore=store)
+        header = store.types['std_msgs/msg/Header'](store.types['builtin_interfaces/msg/Time'](1, 0), 'front')
+        msg = store.types[cloud.msgtype](header, 1, 0, [], False, 0, 0, np.empty(0, np.uint8), True)
+        writer.write(cloud, 1_000_000_000, store.serialize_cdr(msg, cloud.msgtype))
+    report = draft_profile(tmp_path/'mixed')
+    assert report['profile']['lidar'] == '/points' and report['profile']['lidar_frame'] == 'front'
+    assert report['candidates']['lidar'] == ['/points']
+    assert all('tools.laser_scan' not in line for line in report['questions'])
