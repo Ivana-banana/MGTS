@@ -15,7 +15,7 @@ from tools.drift_warning_trial import evaluate, predict
 from tools.kitti_repeat import PREFIX, calibration, integrated, load_scan, timestamps
 
 
-def run(source, run_dir):
+def run(source, run_dir, alternate_map=None):
     first = json.loads((run_dir/'scores.json').read_text())['inspection_first']
     ids = range(first, first + 40)
     with ZipFile(source/'drive.zip') as archive, ZipFile(source/'calib.zip') as calib:
@@ -28,11 +28,11 @@ def run(source, run_dir):
     # Integrate only body-frame velocities and rates from zero for the warning.
     odom = integrated(imu_times, packets, np.zeros(3))
     truth = read_csv(run_dir/'inspection-reference.csv')
-    points = read_map(run_dir/'map.yaml')[2]
+    points = read_map(alternate_map or run_dir/'map.yaml')[2]
     tree = cKDTree(points)
     estimates = list(track(stream, np.array(truth[0][1:]), map_points=points))
     saved = read_csv(run_dir/'known.csv')
-    if not all(row.t == pose.t and np.allclose(row.pose, pose[1:], rtol=0, atol=1e-8)
+    if alternate_map is None and not all(row.t == pose.t and np.allclose(row.pose, pose[1:], rtol=0, atol=1e-8)
                for row, pose in zip(estimates, saved, strict=True)):
         raise ValueError('Replay differs from #161')
     results = {}
@@ -55,5 +55,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('archives', type=Path)
     parser.add_argument('run_dir', type=Path)
+    parser.add_argument('--map', type=Path, help='Recompute tracking against an alternative #163 map')
     args = parser.parse_args()
-    print(json.dumps(run(args.archives, args.run_dir), indent=2))
+    print(json.dumps(run(args.archives, args.run_dir, args.map), indent=2))
