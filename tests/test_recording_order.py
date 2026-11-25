@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from mgts_nav.demo import PROFILE, generate
-from mgts_nav.solve import route_extent, suspected_recording_swap
+from mgts_nav.solve import route_extent, same_recording, suspected_recording_swap
 
 
 def route(path, points):
@@ -48,3 +48,21 @@ def test_solve_only_reports_suspected_swap(tmp_path):
             assert summary['recording_order']['suspected_swap']
         else:
             assert 'WARNING' not in run.stderr and 'recording_order' not in summary
+            assert 'same_recording' not in summary
+
+
+def test_same_recording_via_volume_and_directory(tmp_path):
+    data = tmp_path / 'recordings'
+    generate(data)
+    directory = data / 'inspection'
+    volume, = directory.glob('*.db3')
+    assert same_recording(directory, directory)
+    assert same_recording(volume, directory)
+    assert not same_recording(data / 'mapping', volume)
+    output = tmp_path / 'repeat'
+    run = subprocess.run([sys.executable, '-m', 'mgts_nav.solve', directory, volume,
+                          '--config', PROFILE, '--initial', '0', '0', '0', '--out', output],
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert 'same recording' in run.stderr
+    assert json.loads((output / 'inspection/summary.json').read_bytes())['same_recording']

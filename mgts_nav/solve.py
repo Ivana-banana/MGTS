@@ -17,6 +17,7 @@ from .grid import DEFAULT_RESOLUTION, check_resolution
 from .metrics import read_csv
 from .ros_export import export
 from .slam import checked_pose, read_initial_pose
+from .solve_manifest import bag_files
 from .zones import load_zones, read_visits, write_visits
 
 
@@ -42,6 +43,21 @@ def route_extent(path):
             pass  # Stationary and collinear routes enclose zero area.
     return dict(duration_s=rows[-1].t - rows[0].t,
                 path_m=float(np.linalg.norm(np.diff(xy, axis=0), axis=1).sum()), hull_area_m2=area)
+
+
+def same_recording(mapping, inspection):
+    a, b = Path(mapping), Path(inspection)
+    if a.samefile(b):
+        return True
+    if a.is_dir() == b.is_dir():
+        return False
+    directory, file = (a, b) if a.is_dir() else (b, a)
+    try:
+        volumes = bag_files(directory)[1:]
+        return len(volumes) == 1 and volumes[0].samefile(file)
+    except (OSError, ValueError):
+        # A diagnostic must not impose additional metadata requirements on a readable bag.
+        return False
 
 
 def suspected_recording_swap(mapping_route, inspection_route):
@@ -98,6 +114,10 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             cfg = check_recording(inspection, profiles / 'inspection.json')
         except ValueError as exc:
             raise ValueError(f'Inspection profile {inspection_profile or profile}: {exc}') from exc
+        reused = same_recording(mapping, inspection)
+        if reused:
+            print('WARNING: Mapping and inspection use the same recording. '
+                  'Use separate recordings to evaluate a repeat inspection.', file=sys.stderr)
         def invoke(*args):
             subprocess.run(module_command('mgts_nav', *args), check=True)
         map_flags = ['--resolution', resolution]
@@ -137,7 +157,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
                 counts[name] += 1
             summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries),
                                     intervals_by_zone=counts)
-        if order or zones is not None:
+        if reused:
+            summary['same_recording'] = True
+        if reused or order or zones is not None:
             (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         if cfg['odom'] is not None:
             baseline = subprocess.run(module_command('mgts_nav', 'baseline', str(inspection),

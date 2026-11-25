@@ -18,6 +18,8 @@
 
 ### Команды
 
+Если оба аргумента `solve` указывают на одну запись, в stderr появится предупреждение `same recording`, а в `inspection/summary.json` — `"same_recording": true`. Обработка продолжится. Проверка распознаёт также каталог однотомной записи ROS 2 и его файл данных. Две отдельные копии одного файла могут иметь одинаковое содержимое; эта проверка сравнивает файловые объекты и не читает данные для вычисления хеша.
+
 ```powershell
 python -m mgts_nav inspect data/mapping --inventory
 python -m mgts_nav inspect data/inspection --inventory
