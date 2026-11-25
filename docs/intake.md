@@ -56,6 +56,15 @@ python -m mgts_nav.solve data/mapping data/inspection --config configs/official-
 
 ### Развилки при неизвестной схеме
 
+Для репетиции с внешней схемой используйте пример [адаптера лидара](../tools/custom_lidar.py). Тип [Packet.msg](../configs/custom_lidar/Packet.msg) содержит заголовок, единицы и массив [Return.msg](../configs/custom_lidar/Return.msg). Команда принимает каталог ROS 2 bag с CDR и сохранённым хешем типа. Поля forward, left, up в миллиметрах кадра lidar_flu переходят в x, y, z в метрах. Адаптер сохраняет header.stamp и время записи отдельно и пишет выбранный поток в новый bag. Для сообщения организаторов потребуется его собственная схема и подтверждённое соответствие полей.
+
+```powershell
+python -m mgts_nav inspect data/custom --inventory
+python -m tools.custom_lidar data/custom /raw configs/custom_lidar out/custom-points
+python -m mgts_nav inspect out/custom-points
+python -m pytest -q tests/test_custom_lidar.py
+```
+
 | Что неизвестно | Что запустить сейчас | Как подключить окончательно |
 |---|---|---|
 | Пользовательский тип, сжатые пакеты или отсутствующий PointCloud2 | `inspect --inventory` покажет заявленные типы без декодирования. Если уже есть отдельный стандартный PointCloud2, выбрать его через `--lidar`. | Запросить у организаторов .msg/.idl, единицы, кадр и описание кодирования. Граница чтения и декодирования в `mgts_nav/bag.py`, клиенты получают `Scan`. |

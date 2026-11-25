@@ -23,7 +23,7 @@ MODULES = (
 TESTS = (
     'ambiguity', 'aux_cli_input', 'bag', 'calibration', 'camera_demo', 'cli_input_audit',
     'coarse_corridor', 'coarse_start_budget', 'continuous', 'corridor', 'delayed_start_controls', 'demo',
-    'deskew', 'deskew_experiment', 'glass_experiment', 'gyro_deskew', 'heap1_warning_score', 'image_pairs', 'imu_availability',
+    'custom_lidar', 'deskew', 'deskew_experiment', 'glass_experiment', 'gyro_deskew', 'heap1_warning_score', 'image_pairs', 'imu_availability',
     'initialization', 'intake', 'intel_lab', 'intel_laser_clock', 'intel_longitudinal',
     'intel_order_odom', 'intel_scan_pair', 'interior_loop', 'joint_outage', 'laser_scan', 'leveling',
     'leveling_experiment', 'loop', 'map_eval', 'map_yaml', 'mapping_rejections', 'metrics',
@@ -38,6 +38,9 @@ TESTS = (
 FILES = tuple(sorted((
     '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'requirements-win-amd64-py310.lock', 'pytest.ini',
     'configs/demo-zones.json', 'configs/example.json', 'configs/inspection.rviz', 'docs/ambiguity.md',
+    'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg', 'tools/custom_lidar.py',
+    'docs/drift-warning-trial.md', 'docs/independent-icp.md', 'docs/kitti-repeat.md',
+    'tools/drift_warning_trial.py', 'tools/independent_icp.py', 'tools/kitti_repeat.py', 'tools/kitti_warning_trial.py',
     'docs/angular-recovery-controls.md', 'docs/camera-diagnosis.csv', 'docs/camera-diagnosis.md',
     'docs/camera-experiment.md', 'docs/clock-offset.md', 'docs/coarse-corridor.md',
     'docs/coarse-start.md', 'docs/corridor.md', 'docs/delayed-start-controls.md', 'docs/delayed-start.md',

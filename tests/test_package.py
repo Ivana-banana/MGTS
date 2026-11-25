@@ -136,6 +136,7 @@ def test_reproducible_committed_runtime(tmp_path):
         assert {'mgts_nav/image_pairs.py', 'docs/image-pairs.md'} <= set(names)
         assert {name for name in names if name.startswith('configs/')} == {
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
+            'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg',
         }
         tracked = subprocess.check_output(
             ['git', 'ls-tree', '-r', '--name-only', commit, '--', 'mgts_nav', 'tests', 'tools'],
