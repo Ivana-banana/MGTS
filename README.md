@@ -83,8 +83,12 @@ python -m mgts_nav.solve data/mapping data/inspection --config data/mapping.json
 
 ## Окружение команды
 
+В обычном Windows PowerShell команда ниже показывает также причины пропуска отдельных тестов.
+
 ```powershell
-python -m pytest -q
+& .\.venv-mgts\Scripts\python.exe -m pytest -q -rs
 ```
+
+Для проверки C++ откройте Developer PowerShell x64 с доступным `cl.exe` в той же папке проекта и выполните `& .\.venv-mgts\Scripts\python.exe -m pytest -q tests/test_native_grid.py`. Тест сам собирает DLL во временном каталоге, запускает Python- и C++-варианты и сравнивает файлы результата. Полевой тест поиска по участкам карты использует локальные данные опыта №94 и пропускается, если они ещё не подготовлены. [Сборка C++](docs/native-grid.md) · [Полевые данные №94](https://github.com/Ivana-banana/MGTS/issues/94)
 
 В шаблонах issue и PR фиксируем входную запись, команду воспроизведения и сравнение с базовым методом. Для Claude Code подключены персональный режим `/tests`, защита конфигов линтеров и ревью `silent-failure-hunter`. Хук использует Node.js из PATH и запускается из корня MGTS. Правила локальной работы описаны в [AGENTS.md](AGENTS.md). [Версия командного hackathon-kit](https://github.com/IR630/hackathon-kit/tree/09fe1a9ab8a65080b20f02abbce82ead066eb207)
