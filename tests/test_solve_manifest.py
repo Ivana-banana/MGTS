@@ -41,6 +41,7 @@ def test_manifest_cli_relocation_and_mutation(tmp_path):
 
     created = invoke("create", root, "--solve-revision", "example-release")
     assert created.returncode == 0, created.stderr
+    assert not created.stderr
     raw = (root / "manifest.json").read_text()
     assert str(tmp_path) not in raw
     report = json.loads(raw)
@@ -61,3 +62,25 @@ def test_manifest_cli_relocation_and_mutation(tmp_path):
         failure = invoke("verify", moved)
         assert failure.returncode != 0 and label in failure.stderr
         path.write_bytes(old)
+
+    # One renamed volume is shared, but the other has distinct measurements.
+    (root / "inspection.bag").unlink()
+    split_bag(root / "inspection.bag")
+    other = root / "inspection.bag"
+    (other / "part0.db3").rename(other / "copy.db3")
+    meta = other / "metadata.yaml"
+    meta.write_text(meta.read_text().replace("part0.db3", "copy.db3"))
+    (other / "part1.db3").write_bytes(b"different volume")
+    (root / "manifest.json").unlink()
+    for action in ("create", "verify"):
+        result = invoke(action, root)
+        assert result.returncode == 0, result.stderr
+        assert "mapping/part0.db3, inspection/copy.db3" in result.stderr
+        assert "part1.db3" not in result.stderr
+
+    shutil.copyfile(mapping / "metadata.yaml", meta)
+    (other / "copy.db3").rename(other / "part0.db3")
+    (other / "part0.db3").write_bytes(b"distinct first volume")
+    (root / "manifest.json").unlink()
+    result = invoke("create", root)
+    assert result.returncode == 0 and not result.stderr

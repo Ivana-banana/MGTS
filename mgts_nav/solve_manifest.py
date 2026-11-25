@@ -1,8 +1,10 @@
 """Fingerprint the inputs and products of a completed solve run."""
 import argparse
+from collections import defaultdict
 import hashlib
 import json
 from pathlib import Path, PureWindowsPath
+import sys
 
 import yaml
 
@@ -80,6 +82,18 @@ def metadata(solution):
                 initial_pose=summary.get("initial_pose"))
 
 
+def warn_shared_volumes(hashes):
+    groups = defaultdict(lambda: defaultdict(list))
+    for key, checksum in hashes.items():
+        role, _, name = key.partition("/")
+        if role in ("mapping", "inspection") and name != "metadata.yaml":
+            groups[checksum][role].append(key)
+    for files in groups.values():
+        if "mapping" in files and "inspection" in files:
+            print("WARNING: Byte-identical recording volumes: "
+                  + ", ".join(files["mapping"] + files["inspection"]), file=sys.stderr)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
@@ -109,6 +123,7 @@ def main(argv=None):
             if data.get("parameters") != metadata(solution):
                 raise ValueError("Manifest parameters disagree with solve products")
             print(f"Verified {len(actual)} files")
+        warn_shared_volumes(actual)
     except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:
         parser.exit(2, f"{exc}\n")
 
