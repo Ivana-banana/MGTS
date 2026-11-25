@@ -36,6 +36,17 @@ def test_no_extrapolation_or_motion_across_gaps():
     assert missing["coverage"] == 0
     assert missing["ate_xy_rmse_m"] is None
     assert missing["absolute_yaw_rmse_rad"] is None
+    assert all(value is None for key, value in missing.items() if key.startswith("max_"))
+
+
+def test_peak_errors_on_reference_clock():
+    estimate = [Pose(10, 0, 0, math.radians(179)), Pose(12, 0, 0, math.radians(-179))]
+    truth = [Pose(9, 100, 0, 0), Pose(10, 0, 0, math.radians(-171)),
+             Pose(11, 3, 4, math.pi), Pose(12, 3, 4, estimate[-1].yaw)]
+    result = evaluate(estimate, truth)
+    assert (result["max_xy_error_m"], result["max_xy_error_t"]) == (5, 11)
+    assert result["max_absolute_yaw_error_rad"] == pytest.approx(math.radians(10))
+    assert result["max_absolute_yaw_error_t"] == 10
 
 
 def test_constant_heading_bias_while_stationary(tmp_path):

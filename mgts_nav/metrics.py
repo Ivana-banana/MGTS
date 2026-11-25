@@ -75,6 +75,7 @@ def evaluate(estimate, truth, max_gap_s=None):
     times = [p.t for p in estimate]
     matched = pairs = 0
     position_sq = yaw_sq = translation_sq = rotation_sq = 0.0
+    max_xy = max_yaw = max_xy_t = max_yaw_t = None
     previous = None
     for ref in truth:
         est = interpolate(estimate, times, ref.t, estimate_limit)
@@ -82,8 +83,15 @@ def evaluate(estimate, truth, max_gap_s=None):
             previous = None
             continue
         matched += 1
-        position_sq += (est.x - ref.x) ** 2 + (est.y - ref.y) ** 2
-        yaw_sq += wrap(est.yaw - ref.yaw) ** 2
+        xy_sq = (est.x - ref.x) ** 2 + (est.y - ref.y) ** 2
+        xy = math.sqrt(xy_sq)
+        yaw = abs(wrap(est.yaw - ref.yaw))
+        position_sq += xy_sq
+        yaw_sq += yaw ** 2
+        if max_xy is None or xy > max_xy:
+            max_xy, max_xy_t = xy, ref.t
+        if max_yaw is None or yaw > max_yaw:
+            max_yaw, max_yaw_t = yaw, ref.t
         if previous is not None:
             last_est, last_ref = previous
             # A pair requires a continuous estimator interval even when the
@@ -106,6 +114,8 @@ def evaluate(estimate, truth, max_gap_s=None):
         "coverage": matched / len(truth), "relative_pairs": pairs,
         "ate_xy_rmse_m": math.sqrt(position_sq / matched) if matched else None,
         "absolute_yaw_rmse_rad": math.sqrt(yaw_sq / matched) if matched else None,
+        "max_xy_error_m": max_xy, "max_xy_error_t": max_xy_t,
+        "max_absolute_yaw_error_rad": max_yaw, "max_absolute_yaw_error_t": max_yaw_t,
         "rpe_translation_rmse_m": math.sqrt(translation_sq / pairs) if pairs else None,
         "rpe_rotation_rmse_rad": math.sqrt(rotation_sq / pairs) if pairs else None,
     }
