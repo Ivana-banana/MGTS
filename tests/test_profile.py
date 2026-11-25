@@ -1,9 +1,29 @@
+import json
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 from rosbags.rosbag2 import Writer
 from rosbags.typesys import Stores, get_typestore
 
 from mgts_nav.profile import draft_profile
+
+
+def test_redirected_profile_preserves_unicode(tmp_path):
+    bag = tmp_path / 'bag'
+    with Writer(bag, version=8) as writer:
+        writer.add_connection('/lidar', 'sensor_msgs/msg/PointCloud2',
+                              typestore=get_typestore(Stores.ROS2_HUMBLE))
+    command = [sys.executable, '-m', 'mgts_nav.profile', str(bag), '--base', '基座']
+    env = dict(os.environ, PYTHONIOENCODING='cp1251')
+    stdout = subprocess.check_output(command, env=env)
+    assert json.loads(stdout.decode('ascii'))['profile']['base_frame'] == '基座'
+    target = tmp_path / 'draft.json'
+    subprocess.run([*command, '--out', target], env=env, check=True)
+    content = target.read_text(encoding='utf-8')
+    assert '基座' in content and json.loads(content) == json.loads(stdout)
 
 
 def test_ambiguous_lidars_and_recorded_static_calibration(tmp_path):

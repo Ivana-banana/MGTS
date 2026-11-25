@@ -54,7 +54,7 @@ def measure(bag, cfg, start, points, truth):
 def run(demo):
     cfg = load_config(PROFILE)
     truth = np.array(read_csv(demo/"inspection_truth.csv"))
-    start = json.loads((demo/"initial_pose.json").read_text())
+    start = json.loads((demo/"initial_pose.json").read_text(encoding="utf-8"))
     with TemporaryDirectory() as tmp:
         work = Path(tmp)
         grid = Grid(.08)

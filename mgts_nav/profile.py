@@ -118,7 +118,7 @@ def main():
     try:
         report = draft_profile(args.bag, lidar=args.lidar, imu=args.imu, odom=args.odom,
                                base=args.base, tf_topic=args.tf_topic, verify_frames=args.verify_frames)
-        serialized = json.dumps(report, ensure_ascii=False, indent=2)
+        serialized = json.dumps(report, ensure_ascii=args.out is None, indent=2)
         if args.out:
             with args.out.open('x', encoding='utf-8') as file:
                 file.write(serialized + '\n')

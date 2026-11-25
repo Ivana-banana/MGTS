@@ -133,7 +133,7 @@ def compare(directory, seed):
         config_path.write_text(json.dumps(profile), encoding='utf-8')
         result = directory / mode
         solve(directory / 'mapping', directory / 'inspection', config_path, result, initial=initial)
-        summary = json.loads((result / 'inspection/summary.json').read_text())
+        summary = json.loads((result / 'inspection/summary.json').read_text(encoding='utf-8'))
         initial = summary['initial_pose']
         _, meta, pixels_xy = read_map(result / 'map/map.yaml')
         map_score = evaluate_map(pixels_xy, WALLS, meta['resolution'], tolerance=.12)
@@ -143,7 +143,7 @@ def compare(directory, seed):
         for run, folder in [('mapping', 'map'), ('inspection', 'inspection')]:
             truth = read_csv(source / f'{run}_truth.csv')
             metrics = evaluate(read_csv(result / folder / 'trajectory.csv'), truth)
-            status = json.loads((result / folder / 'summary.json').read_text())['status']
+            status = json.loads((result / folder / 'summary.json').read_text(encoding='utf-8'))['status']
             modes[mode][run] = dict(ate_m=metrics['ate_xy_rmse_m'], coverage=metrics['coverage'],
                                     status=status, scan_wall_rmse_m=scan_wall_rmse(directory / run, profile, run, truth))
     modes['crossed'] = compare_on_fixed_maps(directory, modes, read_csv(source / 'inspection_truth.csv'))

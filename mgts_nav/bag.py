@@ -1,6 +1,7 @@
 """ROS boundary. All motion and scan timestamps below use header time (seconds)."""
 import json
-from contextlib import contextmanager
+import locale
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +22,18 @@ def reader(path):
     if path.name.lower() == 'metadata.yaml' and path.is_file():
         raise ValueError(f'{path}: pass the recording directory {path.parent}')
     try:
-        with AnyReader([path], default_typestore=get_typestore(Stores.ROS2_HUMBLE)) as source:
+        with ExitStack() as stack:
+            try:
+                source = stack.enter_context(AnyReader([path], default_typestore=get_typestore(Stores.ROS2_HUMBLE)))
+            except (UnicodeDecodeError, AnyReaderError) as exc:
+                metadata = path / 'metadata.yaml'
+                encoding = locale.getpreferredencoding(False)
+                if (encoding.lower() != 'utf-8' and metadata.is_file()
+                        and (isinstance(exc, UnicodeDecodeError) or 'database files are missing' in str(exc))
+                        and not metadata.read_bytes().isascii()):
+                    raise ValueError(f'{metadata}: {exc}. Retry with python -X utf8 '
+                                     f'to read UTF-8 volume names (current encoding: {encoding}).') from exc
+                raise
             yield source
     except AnyReaderError as exc:
         raise ValueError(f'{path}: cannot open or read recording: {exc}') from exc

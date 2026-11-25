@@ -52,6 +52,7 @@ def test_utf8_volume_names_through_cli(tmp_path):
                 assert variant == 'unicode' and mode == '0' and enc[0].lower() != 'utf-8'
                 detail = proc.stderr.decode(enc[2], errors='replace').lower()
                 print(detail.strip())
+                assert '-x utf8' in detail
                 assert proc.returncode == 2 and any(s in detail for s in (
                     'decode', 'utf-8', 'missing', 'metadata', 'database')), detail
                 assert not out.exists()
