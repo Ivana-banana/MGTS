@@ -21,7 +21,10 @@ def read_csv(path):
     poses = []
     with Path(path).open(encoding="utf-8-sig", newline="") as stream:
         rows = csv.DictReader(stream)
-        if not set(Pose._fields).issubset(rows.fieldnames or []):
+        fields = rows.fieldnames or []
+        if len(fields) == 1 and set(Pose._fields).issubset(fields[0].split(';')):
+            raise ValueError(f"{path}: columns are separated by ';'. Use comma separators and a decimal point")
+        if not set(Pose._fields).issubset(fields):
             raise ValueError(f"{path}: required columns are t,x,y,yaw")
         for line, row in enumerate(rows, 2):
             try:

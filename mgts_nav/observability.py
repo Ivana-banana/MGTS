@@ -65,10 +65,13 @@ def main():
         if args.config is None:
             parser.error('--bag requires --config')
         from .bag import load_config, scans
-        first = next(iter(scans(args.bag, load_config(args.config))), None)
-        if first is None:
-            parser.error('Recording contains no lidar scans')
-        report = dict(t=first.t, geometry=diagnose(first.xy))
+        try:
+            first = next(iter(scans(args.bag, load_config(args.config))), None)
+            if first is None:
+                raise ValueError('Recording contains no lidar scans')
+            report = dict(t=first.t, geometry=diagnose(first.xy))
+        except (OSError, ValueError, KeyError) as exc:
+            parser.exit(2, f'{exc}\n')
     else:
         along = np.linspace(-3., 3., 121)
         wall = np.column_stack((along, np.ones_like(along)))

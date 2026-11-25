@@ -189,14 +189,19 @@ def run(args, output):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav', description=__doc__,
+                                     epilog='Other modules: mgts_nav.solve, mgts_nav.profile, '
+                                            'mgts_nav.metrics, mgts_nav.rehearse.')
     sub = parser.add_subparsers(dest='command', required=True)
     survey = sub.add_parser('inspect', help='List topics, frames, fields, timing and gaps')
-    survey.add_argument('bag', type=Path)
+    bag_help = 'Recording directory containing metadata.yaml or a supported recording file'
+    survey.add_argument('bag', type=Path, help=bag_help)
     survey.add_argument('--inventory', action='store_true', help='Read metadata only; skip message payloads')
-    for name in ('map', 'localize', 'baseline'):
-        p = sub.add_parser(name)
-        p.add_argument('bag', type=Path)
+    for name, description in (('map', 'Build an occupancy map'),
+                              ('localize', 'Localize the inspection recording'),
+                              ('baseline', 'Dead-reckon from odometry')):
+        p = sub.add_parser(name, help=description, description=description)
+        p.add_argument('bag', type=Path, help=bag_help)
         p.add_argument('--config', required=True, type=Path)
         p.add_argument('--out', required=True, type=Path, help='A new output directory')
         if name != 'baseline':
@@ -209,7 +214,8 @@ def main():
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')
-            group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
+            group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'),
+                               help='Map-frame X and Y in metres, YAW in radians')
             group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
         if name == 'localize':
             from .delayed_start import START_SEARCHES
@@ -224,7 +230,7 @@ def main():
             print(json.dumps(inspect_bag(args.bag, args.inventory), indent=2))
             return
         if args.out.exists():
-            parser.error(f'Output already exists: {args.out}. Choose a new directory.')
+            parser.exit(2, f'Output already exists: {args.out}. Choose a new directory.\n')
         args.out.parent.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(dir=args.out.parent) as tmp:
             stage = Path(tmp) / 'result'
@@ -238,4 +244,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        import sys
+        print('Interrupted', file=sys.stderr)
+        sys.exit(130)

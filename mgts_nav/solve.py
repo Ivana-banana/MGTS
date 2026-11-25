@@ -8,9 +8,13 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
+import numpy as np
+from scipy.spatial import ConvexHull, QhullError
+
 from .bag import check_recording
 from .delayed_start import START_SEARCHES
 from .grid import DEFAULT_RESOLUTION, check_resolution
+from .metrics import read_csv
 from .ros_export import export
 from .slam import checked_pose, read_initial_pose
 from .zones import load_zones, read_visits, write_visits
@@ -25,6 +29,31 @@ def module_command(module, *args):
                      "runpy.run_module(sys.argv.pop(1), run_name='__main__', alter_sys=True)")
         return [*python, '-I', '-c', bootstrap, str(Path(archive).resolve()), module, *map(str, args)]
     return [*python, '-m', module, *map(str, args)]
+
+
+def route_extent(path):
+    rows = read_csv(path)
+    xy = np.array([(p.x, p.y) for p in rows])
+    area = 0.
+    if len(xy) >= 3:
+        try:
+            area = float(ConvexHull(xy).volume)
+        except QhullError:
+            pass  # Stationary and collinear routes enclose zero area.
+    return dict(duration_s=rows[-1].t - rows[0].t,
+                path_m=float(np.linalg.norm(np.diff(xy, axis=0), axis=1).sum()), hull_area_m2=area)
+
+
+def suspected_recording_swap(mapping_route, inspection_route):
+    try:
+        mapping, inspection = route_extent(mapping_route), route_extent(inspection_route)
+    except ValueError:
+        # This optional comparison requires increasing timestamps in both routes.
+        return None
+    ratio = 1.25
+    if all(inspection[k] > ratio * mapping[k] for k in ('path_m', 'hull_area_m2')):
+        return dict(mapping=mapping, inspection=inspection, ratio=ratio, suspected_swap=True)
+    return None
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
@@ -61,8 +90,14 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         if zones is not None:
             shutil.copyfile(zones, profiles / 'zones.json')
             polygons = load_zones(profiles / 'zones.json')
-        check_recording(mapping, profiles / 'mapping.json')
-        cfg = check_recording(inspection, profiles / 'inspection.json')
+        try:
+            check_recording(mapping, profiles / 'mapping.json')
+        except ValueError as exc:
+            raise ValueError(f'Mapping profile {profile}: {exc}') from exc
+        try:
+            cfg = check_recording(inspection, profiles / 'inspection.json')
+        except ValueError as exc:
+            raise ValueError(f'Inspection profile {inspection_profile or profile}: {exc}') from exc
         def invoke(*args):
             subprocess.run(module_command('mgts_nav', *args), check=True)
         map_flags = ['--resolution', resolution]
@@ -89,6 +124,11 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         summary = json.loads((result / 'summary.json').read_text(encoding='utf-8'))
         # Both methods get the same start, including when it was estimated by scan matching.
         route = result / 'trajectory.csv'
+        order = suspected_recording_swap(map_dir / 'trajectory.csv', route)
+        if order:
+            summary['recording_order'] = order
+            print('WARNING: The inspection route is longer and covers more area than the mapping route. '
+                  'Check that the recordings are not swapped.', file=sys.stderr)
         if zones is not None:
             entries = read_visits(route, polygons, zone_max_gap)
             write_visits(result / 'zone-visits.csv', entries)
@@ -97,6 +137,7 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
                 counts[name] += 1
             summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries),
                                     intervals_by_zone=counts)
+        if order or zones is not None:
             (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         if cfg['odom'] is not None:
             baseline = subprocess.run(module_command('mgts_nav', 'baseline', str(inspection),
@@ -122,9 +163,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mapping', type=Path)
-    parser.add_argument('inspection', type=Path)
+    parser = argparse.ArgumentParser(prog='python -m mgts_nav.solve', description=__doc__)
+    parser.add_argument('mapping', type=Path, help='Mapping recording')
+    parser.add_argument('inspection', type=Path, help='Inspection recording')
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--inspection-config', type=Path, help='Override mapping sensor profile')
     parser.add_argument('--zones', type=Path, help='Map-frame inspection zone polygons')
@@ -133,7 +174,8 @@ if __name__ == '__main__':
     start.add_argument('--start-search', choices=START_SEARCHES)
     start.add_argument('--confirm-start', action='store_true',
                        help='Verify an accepted single-scan start using later scans and odometry')
-    start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
+    start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'),
+                       help='Map-frame X and Y in metres, YAW in radians')
     start.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
@@ -152,5 +194,7 @@ if __name__ == '__main__':
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
               args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap,
               resolution=args.resolution, mapping_velocity_prior=args.mapping_velocity_prior)
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted\n')
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

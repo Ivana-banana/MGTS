@@ -65,6 +65,9 @@ class Grid:
 
 def read_map(path):
     path = Path(path)
+    if path.is_dir() or path.suffix.lower() == '.pgm':
+        candidate = (path if path.is_dir() else path.parent) / 'map.yaml'
+        raise ValueError(f'{path}: expected map YAML; try {candidate}')
     try:
         meta = yaml.safe_load(path.read_text(encoding='utf-8'))
     except yaml.YAMLError as exc:

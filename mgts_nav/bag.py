@@ -1,5 +1,6 @@
 """ROS boundary. All motion and scan timestamps below use header time (seconds)."""
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,8 +15,16 @@ from .deskew import deskew_points
 from .leveling import build_leveler
 
 
+@contextmanager
 def reader(path):
-    return AnyReader([Path(path)], default_typestore=get_typestore(Stores.ROS2_HUMBLE))
+    path = Path(path)
+    if path.name.lower() == 'metadata.yaml' and path.is_file():
+        raise ValueError(f'{path}: pass the recording directory {path.parent}')
+    try:
+        with AnyReader([path], default_typestore=get_typestore(Stores.ROS2_HUMBLE)) as source:
+            yield source
+    except AnyReaderError as exc:
+        raise ValueError(f'{path}: cannot open or read recording: {exc}') from exc
 
 
 def stamp(msg):
@@ -129,7 +138,10 @@ def load_config(path):
             fields[key] = value
         return fields
 
-    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'), object_pairs_hook=unique_fields)
+    try:
+        cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'), object_pairs_hook=unique_fields)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'{path}: invalid JSON in sensor profile: {exc}') from exc
     if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
         raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
     if 'gravity_level' in cfg and not isinstance(cfg['gravity_level'], bool):

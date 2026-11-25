@@ -44,5 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('out', type=Path)
     try:
         run(parser.parse_args().out)
+    except KeyboardInterrupt:
+        parser.exit(130, 'Interrupted\n')
     except (OSError, ValueError) as error:
         parser.exit(2, f'{error}\n')

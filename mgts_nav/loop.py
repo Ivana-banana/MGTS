@@ -1,6 +1,5 @@
 """Diagnose a possible endpoint revisit without changing the map or trajectory."""
 import argparse
-import csv
 import json
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .bag import load_config, scans
+from .metrics import read_csv
 from .slam import match, relative, world
 
 
@@ -53,19 +53,21 @@ def main():
     parser.add_argument('trajectory', type=Path)
     parser.add_argument('--config', required=True, type=Path)
     args = parser.parse_args()
-    with args.trajectory.open(encoding='utf-8-sig', newline='') as source:
-        rows = list(csv.DictReader(source))
-    stream = iter(scans(args.bag, load_config(args.config)))
-    first = next(stream, None)
-    if first is None or len(rows) < 2:
-        parser.error('Recording and trajectory need at least two poses')
-    last = first
-    for last in stream:
-        pass
-    if max(abs(float(rows[0]['t']) - first.t), abs(float(rows[-1]['t']) - last.t)) > .001:
-        parser.error('Trajectory endpoints must correspond to the first and last lidar scans')
-    poses = [[float(row[key]) for key in ('x', 'y', 'yaw')] for row in rows]
-    print(json.dumps(diagnose(first.xy, last.xy, poses), indent=2, allow_nan=False))
+    try:
+        rows = read_csv(args.trajectory)
+        stream = iter(scans(args.bag, load_config(args.config)))
+        first = next(stream, None)
+        if first is None or len(rows) < 2:
+            raise ValueError('Recording and trajectory need at least two poses')
+        last = first
+        for last in stream:
+            pass
+        if max(abs(rows[0].t - first.t), abs(rows[-1].t - last.t)) > .001:
+            raise ValueError('Trajectory endpoints must correspond to the first and last lidar scans')
+        result = diagnose(first.xy, last.xy, [row[1:] for row in rows])
+    except (OSError, ValueError) as exc:
+        parser.exit(2, f'{exc}\n')
+    print(json.dumps(result, indent=2, allow_nan=False))
 
 
 if __name__ == '__main__':
