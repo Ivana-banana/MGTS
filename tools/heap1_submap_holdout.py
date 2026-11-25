@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from mgts_nav.bag import load_config, scans
-from mgts_nav.delayed_start import MAX_WINDOW_SCANS, estimate_start
+from mgts_nav.delayed_start import estimate_prepared, prepare_window
 from mgts_nav.grid import read_map
 from mgts_nav.metrics import read_csv, wrap
 
@@ -21,13 +21,14 @@ def compare(data, sections, output):
         samples = list(islice(stream, 60))
         if len(samples) != 60:
             raise ValueError('Expected three complete 60-scan windows')
+        prepared = prepare_window(samples)
         results, starts = [], []
         for first in range(0, 300, 40):
             pixels, meta, _ = read_map(sections/f'section-{first}'/'map.yaml')
             stats = {}
             row = dict(first_survey_scan=first)
             try:
-                start = estimate_start(samples[:MAX_WINDOW_SCANS], pixels, meta, stats)
+                start = estimate_prepared(prepared, pixels, meta, stats)
             except ValueError as exc:
                 row['reason'] = str(exc)
             else:

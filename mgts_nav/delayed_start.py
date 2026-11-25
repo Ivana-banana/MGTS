@@ -1,7 +1,7 @@
 """Evaluate a delayed global start using up to six scans and scan-to-scan motion."""
 import argparse
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import combinations, islice
 from pathlib import Path
 from time import perf_counter
@@ -9,7 +9,7 @@ from time import perf_counter
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .bag import load_config, scans
+from .bag import Scan, load_config, scans
 from .coarse_start import estimate
 from .grid import Grid, read_map
 from .metrics import Pose, evaluate, read_csv, wrap
@@ -24,10 +24,14 @@ def compose(pose, step):
     return np.r_[world(step[:2], pose), wrap(pose[2] + step[2])]
 
 
-def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
-    """Return pose at the first scan. No map-frame prior or kinematic odometry is used."""
-    rows = list(islice(window, MAX_WINDOW_SCANS))
-    stats['anchors'] = []
+@dataclass(frozen=True)
+class PreparedWindow:
+    rows: list[Scan]
+    local: list[np.ndarray]
+    rejection: str | None = None
+
+
+def _local_trajectory(rows, local_method):
     if len(rows) < 21:
         raise ValueError('Need at least three global search slots')
     for previous, current in zip(rows, rows[1:]):
@@ -52,6 +56,30 @@ def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
             local.append(compose(local[-1], step))
     else:
         raise ValueError(f'Unknown local method: {local_method}')
+    return local
+
+
+def prepare_window(window, *, local_method='pairwise'):
+    """Compute motion once, including a repeatable rejection for an unusable window."""
+    rows = list(islice(window, MAX_WINDOW_SCANS))
+    try:
+        local = _local_trajectory(rows, local_method)
+    except ValueError as exc:
+        return PreparedWindow(rows, [], str(exc))
+    return PreparedWindow(rows, local)
+
+
+def estimate_start(window, pixels, meta, stats, *, local_method='pairwise'):
+    """Return pose at the first scan. No map-frame prior or kinematic odometry is used."""
+    return estimate_prepared(prepare_window(window, local_method=local_method), pixels, meta, stats)
+
+
+def estimate_prepared(prepared, pixels, meta, stats):
+    """Match one map with an already evaluated local scan chain."""
+    stats['anchors'] = []
+    if prepared.rejection is not None:
+        raise ValueError(prepared.rejection)
+    rows, local = prepared.rows, prepared.local
     stats['local_end'] = local[-1].tolist()
 
     starts, anchors = [], []

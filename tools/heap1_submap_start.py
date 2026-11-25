@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from mgts_nav.bag import load_config, scans
-from mgts_nav.delayed_start import MAX_WINDOW_SCANS, estimate_start
+from mgts_nav.delayed_start import estimate_prepared, prepare_window
 from mgts_nav.grid import Grid, read_map
 from mgts_nav.native_grid import NativeGrid, load_dll
 from mgts_nav.slam import world
@@ -18,7 +18,7 @@ from mgts_nav.slam import world
 def search(data, full_map, output, dll=None):
     profile = load_config(data/'profile.json')
     _, meta, _ = read_map(full_map/'map.yaml')
-    window = list(islice(scans(data/'inspection', profile), MAX_WINDOW_SCANS))
+    prepared = prepare_window(scans(data/'inspection', profile))
     backend = load_dll(dll) if dll else None
     sections, accepted = [], []
     with (full_map/'trajectory.csv').open(encoding='utf-8-sig', newline='') as source:
@@ -42,7 +42,7 @@ def search(data, full_map, output, dll=None):
             try:
                 grid.save(section)
                 pixels, submeta, _ = read_map(section/'map.yaml')
-                start = estimate_start(window, pixels, submeta, stats)
+                start = estimate_prepared(prepared, pixels, submeta, stats)
             except ValueError as exc:
                 report['reason'] = str(exc)
             else:
