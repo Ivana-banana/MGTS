@@ -58,3 +58,22 @@ $o = 'out/packed-heap1-solve'
 & $python -I -c $launch $archive mgts_nav.solve "$d/mapping" "$d/inspection" --config "$d/profile.json" --start-search delayed --out $o
 if ($LASTEXITCODE -eq 0) { & $python -I -c $launch $archive mgts_nav.solve_audit "$d/mapping" "$d/inspection" $o }
 ```
+
+### Повторить сохранённый расчёт из ZIP
+
+Передайте получателю архив, обе исходные записи, каталог завершённого решения с `solve-options.json` и исходный манифест. Для решения с зонами нужен в том числе `profiles/zones.json` внутри решения. Задайте пути к полученным файлам и новый каталог результата. Переменные `$python`, `$archive` и `$launch` определены выше.
+
+```powershell
+$previous = 'out/solution'
+$mapping = 'data/mapping'
+$inspection = 'data/inspection'
+$manifest = 'out/manifest.json'
+$repeat = 'out/repeated-from-zip'
+& $python -I -X utf8 -c $launch $archive mgts_nav.solve_manifest verify $mapping $inspection $previous $manifest
+if ($LASTEXITCODE -ne 0) { throw 'Исходные файлы расходятся с манифестом' }
+& $python -I -X utf8 -c $launch $archive tools.repeat_solve $previous $mapping $inspection $repeat
+if ($LASTEXITCODE -ne 0) { throw 'Повтор solve завершился ошибкой' }
+& $python -I -X utf8 -c $launch $archive mgts_nav.solve_manifest verify $mapping $inspection $repeat $manifest
+```
+
+Команда читает параметры и профили из предыдущего решения. Для ядра C++ передайте также исходную DLL через `--grid-dll`. Последняя проверка сверяет хеши входов и продуктов повтора с тем же манифестом, включая отчёт посещений зон.

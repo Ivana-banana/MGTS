@@ -70,6 +70,28 @@ def test_diagnostics_from_zip(tmp_path):
           'pairs, SHA-256', hashlib.sha256(packaged).hexdigest())
 
 
+def test_repeat_zones_from_zip(tmp_path):
+    from mgts_nav.demo import PROFILE, generate
+
+    archive = tmp_path / 'runtime.zip'
+    archive.write_bytes(build('HEAD')[1])
+    launch = [sys.executable, '-I', '-X', 'utf8', '-c', ZIP_CLI, str(archive)]
+    data = tmp_path / 'data'
+    generate(data)
+    bags = [str(data/'mapping'), str(data/'inspection')]
+    previous = str(tmp_path/'previous')
+    repeated = str(tmp_path/'repeat')
+    manifest = str(tmp_path/'manifest.json')
+    subprocess.run([*launch, 'mgts_nav.solve', *bags, '--config', str(PROFILE),
+                    '--zones', 'configs/demo-zones.json', '--zone-max-gap', '0.25',
+                    '--initial-file', str(data/'initial_pose.json'), '--out', previous], check=True)
+    subprocess.run([*launch, 'mgts_nav.solve_manifest', 'create', *bags, previous, manifest], check=True)
+    hashes = json.loads((tmp_path/'manifest.json').read_bytes())['sha256']
+    assert {'solution/inspection/zone-visits.csv', 'solution/profiles/zones.json'} <= hashes.keys()
+    subprocess.run([*launch, 'tools.repeat_solve', previous, *bags, repeated], check=True)
+    subprocess.run([*launch, 'mgts_nav.solve_manifest', 'verify', *bags, repeated, manifest], check=True)
+
+
 def test_archived_pose_graph_tests(tmp_path):
     archive = tmp_path / 'runtime.zip'
     archive.write_bytes(build('HEAD')[1])

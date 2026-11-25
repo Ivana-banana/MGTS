@@ -73,6 +73,7 @@ FILES = tuple(sorted((
     'tools/heap1_surface_trial.py', 'tools/heap1_timed_bag.py', 'tools/heap1_turn_recovery.py',
     'tools/heap1_velocity_prior.py', 'tools/intel_lab.py', 'tools/intel_laser_clock.py',
     'tools/intel_longitudinal.py', 'tools/intel_order_odom.py', 'tools/intel_scan_pair.py',
+    'tools/__init__.py', 'tools/repeat_solve.py',
     'tools/native_grid.cpp', 'tools/package_solution.py', 'tools/plot_heap1_drift.py',
     'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
     'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
