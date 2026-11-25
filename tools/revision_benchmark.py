@@ -50,6 +50,13 @@ def benchmark(args):
     revision, payload = build(args.revision)
     archive = args.out / 'runtime.zip'
     archive.write_bytes(payload)
+    needed = [args.data/'mapping', args.data/'inspection', args.config, args.truth]
+    missing = [str(path) for path in needed if not path.exists()]
+    if missing:
+        unavailable = dict(revision=revision, status='unavailable', missing=missing)
+        (args.out/'report.json').write_text(json.dumps(unavailable, indent=2), encoding='utf-8')
+        print(json.dumps(unavailable))
+        return
     inputs = [p for name in ('mapping', 'inspection') for p in bag_files((args.data / name).resolve())]
     truth = read_csv(args.truth)
     result = dict(revision=revision, archive_sha256=digest(archive), hardware=hardware(),
