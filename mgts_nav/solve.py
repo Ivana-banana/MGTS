@@ -92,7 +92,11 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         if zones is not None:
             entries = read_visits(route, polygons, zone_max_gap)
             write_visits(result / 'zone-visits.csv', entries)
-            summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries))
+            counts = dict.fromkeys(polygons, 0)
+            for name, *_ in entries:
+                counts[name] += 1
+            summary['zones'] = dict(max_gap_s=zone_max_gap, visit_intervals=len(entries),
+                                    intervals_by_zone=counts)
             (result / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
         if cfg['odom'] is not None:
             baseline = subprocess.run(module_command('mgts_nav', 'baseline', str(inspection),
