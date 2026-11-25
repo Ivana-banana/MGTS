@@ -38,3 +38,35 @@ foreach ($name in 'intel.log.gz','intel.gfs.log.gz') { curl.exe -fLsS "$base/$na
 & $p -m mgts_nav.metrics "$r/map/trajectory.csv" "$r/data/mapping-external.csv"
 & $p -m mgts_nav.metrics "$r/known/trajectory.csv" "$r/data/inspection-external.csv"
 ```
+
+## Колёсная одометрия на тех же сканах
+
+Опция адаптера `--with-odom` добавляет сообщения nav_msgs/Odometry и включает топик /odom в профиле. CARMEN ODOM содержит положение корпуса x,y в метрах и угол theta в радианах в локальной системе одометрии; tv и rv задают поступательную и угловую скорости. Поза переносится в систему odom, дочерняя система — base, поворот вокруг Z записывается кватернионом. Поля tv и rv равны нулю во всех 26 915 сообщениях этой записи; штатный трекер использует изменение позы. Высота, крен и тангаж для плоской модели равны нулю. Значения ковариаций в журнале отсутствуют. Исходный журнал и каталог площадки приведены выше.
+
+Метки ODOM берутся из собственного IPC timestamp в секундах. IPC и относительные часы logger имеют общее смещение 976052857,337284 с, как у FLASER. В порядке файла есть 602 обратных шага ODOM, дубликатов меток нет. Для каждого окна взяты отсортированные измерения между крайними сканами и ближайшие граничные отсчёты. Выбор FLASER сохранён по протоколу №107; проверены попарно обе метки и каждый байт всех 824 + 60 лазерных сообщений. [Условия эксперимента](https://github.com/Ivana-banana/MGTS/issues/108)
+
+| Окно | ODOM | Интервал IPC одометрии, с | Макс. шаг ODOM | Сканы с допустимой интерполяцией |
+|---|---:|---|---:|---:|
+| Обход | 1873 | 976052890,142532–976053077,370876 | 0,949 с | 744/824 |
+| Инспекция | 155 | 976053533,696521–976053549,167543 | 0,759 с | 49/60 |
+
+Сравнение с опубликованными позами RBPF ниже использует только совпадающие эпохи (допуск 1 мкс), без заполнения пропусков. Старт обхода (0,0,0); старт инспекции тот же, что в №107.
+
+| Вариант | RMS XY обхода на всех парных метках | RMS XY обхода на 46 общих метках | RMS XY инспекции с заданным стартом |
+|---|---:|---:|---:|
+| Только лидар | 4,972 м (50) | 4,771 м (46) | 2,411 м (4) |
+| Лидар и колёсная одометрия | 0,728 м (50) | 0,726 м (46) | 0,402 м (4) |
+| Кинематический baseline | 12,132 м (46) | 12,132 м (46) | отказ до расчёта (0) |
+
+В обходе с одометрией получены 1 origin, 647 matched и 176 prediction_only, в лидарном контроле — 1, 796 и 27 соответственно. В инспекции оба варианта дали 60/60 matched с переданным стартом. При слепом старте оба delayed отказали до поиска глобальных опор из-за разрыва цепочки. Штатный baseline обхода выдал 744 позы. Для baseline инспекции уже первый скан попал между отсчётами с интервалом 0,532837 с при прежнем допуске 0,5 с. Команда вернула код 3 и причину No odometry at first scan to anchor baseline. Меньшее расхождение с RBPF на этой паре окон не устанавливает абсолютную точность.
+
+```powershell
+$p = '.\.venv-mgts\Scripts\python.exe'
+$r = 'out/intel108'
+& $p -m tools.intel_lab out/intel107 "$r/data" --with-odom
+& $p -m mgts_nav map "$r/data/mapping" --config "$r/data/profile.json" --resolution .08 --out "$r/map"
+& $p -m mgts_nav localize "$r/data/inspection" --config "$r/data/profile.json" --map "$r/map/map.yaml" --initial-file "$r/data/external-start.json" --out "$r/known"
+& $p -m mgts_nav localize "$r/data/inspection" --config "$r/data/profile.json" --map "$r/map/map.yaml" --start-search delayed --out "$r/blind"
+& $p -m mgts_nav baseline "$r/data/mapping" --config "$r/data/profile.json" --initial 0 0 0 --out "$r/base-map"
+& $p -m mgts_nav baseline "$r/data/inspection" --config "$r/data/profile.json" --initial-file "$r/data/external-start.json" --out "$r/base-inspection"
+```

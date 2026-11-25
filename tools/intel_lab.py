@@ -1,4 +1,4 @@
-"""Convert fixed, disjoint Intel Research Lab FLASER windows to lidar-only bags."""
+"""Convert disjoint Intel Lab FLASER windows, optionally including measured CARMEN odometry."""
 import argparse
 import csv
 from decimal import Decimal
@@ -39,13 +39,48 @@ def points(ranges):
                             np.zeros(valid.sum()))).astype("<f4")
 
 
-def write_window(path, rows):
+def odom_rows(path):
+    samples = []
+    with gzip.open(path, "rt", encoding="ascii") as stream:
+        for line in stream:
+            if line.startswith("ODOM "):
+                tag, x, y, yaw, tv, rv, accel, stamp, host, logger_time = line.split()
+                ns = int(Decimal(stamp) * 10**9)
+                samples.append((ns, tuple(map(float, (x, y, yaw, tv, rv)))))
+    samples.sort(key=lambda sample: sample[0])
+    if not samples or any(a[0] == b[0] for a, b in zip(samples, samples[1:])):
+        raise ValueError("Missing or repeated ODOM timestamps")
+    return samples
+
+
+def write_odometry(writer, store, samples):
+    types = store.types
+    conn = writer.add_connection("/odom", "nav_msgs/msg/Odometry", typestore=store)
+    vector = types["geometry_msgs/msg/Vector3"]
+    cov = np.zeros(36)
+    for ns, (x, y, yaw, tv, rv) in samples:
+        stamp = types["builtin_interfaces/msg/Time"](*divmod(ns, 10**9))
+        header = types["std_msgs/msg/Header"](stamp, "odom")
+        orientation = types["geometry_msgs/msg/Quaternion"](0., 0., np.sin(yaw/2), np.cos(yaw/2))
+        pose = types["geometry_msgs/msg/Pose"](types["geometry_msgs/msg/Point"](x, y, 0.), orientation)
+        twist = types["geometry_msgs/msg/Twist"](vector(tv, 0., 0.), vector(0., 0., rv))
+        msg = types[conn.msgtype](header, "base", types["geometry_msgs/msg/PoseWithCovariance"](pose, cov),
+                                  types["geometry_msgs/msg/TwistWithCovariance"](twist, cov))
+        writer.write(conn, ns, store.serialize_cdr(msg, conn.msgtype))
+
+
+def write_window(path, rows, odometry=None):
     store = get_typestore(Stores.ROS2_HUMBLE)
     types = store.types
     field = types["sensor_msgs/msg/PointField"]
     fields = [field(name, i*4, 7, 1) for i, name in enumerate("xyz")]
     with Writer(path, version=8) as writer:
         c = writer.add_connection("/front_laser", "sensor_msgs/msg/PointCloud2", typestore=store)
+        if odometry is not None:
+            times = np.asarray([sample[0] for sample in odometry])
+            lo = max(0, times.searchsorted(rows[0][0], side="right") - 1)
+            hi = times.searchsorted(rows[-1][0], side="left") + 1
+            write_odometry(writer, store, odometry[lo:hi])
         for ns, row in rows:
             xyz = points(np.asarray(row[2:182], dtype=float))
             stamp = types["builtin_interfaces/msg/Time"](*divmod(ns, 10**9))
@@ -54,8 +89,9 @@ def write_window(path, rows):
             writer.write(c, ns, store.serialize_cdr(msg, c.msgtype))
 
 
-def prepare(source, output):
+def prepare(source, output, with_odom=False):
     raw = list(laser_rows(source/"intel.log.gz"))
+    odometry = odom_rows(source/"intel.log.gz") if with_odom else None
     corrected = list(laser_rows(source/"intel.gfs.log.gz"))
     # Join the sparse external SLAM poses to their measured scans before choosing either window.
     elapsed = np.array([float(row[-1]) for row in raw])
@@ -90,13 +126,15 @@ def prepare(source, output):
             for index in indices:
                 if index in published:
                     writer.writerow([raw[index][-3], *relative(anchors[0], published[index])])
-        write_window(output/name, rows)
+        write_window(output/name, rows, odometry)
         summary[name] = dict(scans=len(rows), skipped=skipped, start_ns=rows[0][0], end_ns=rows[-1][0])
     if summary["mapping"]["end_ns"] >= summary["inspection"]["start_ns"]:
         raise ValueError("Overlapping windows")
     profile = dict(lidar="/front_laser", lidar_frame="front_laser", odom=None, imu=None,
                    base_from_lidar_xyz_m=[0,0,0], base_from_lidar_xyzw=[0,0,0,1], height_band_m=[-.1,.1],
                    stationary_s=0, max_sync_gap_s=.5)
+    if with_odom:
+        profile.update(odom="/odom", odom_frame="odom", base_frame="base")
     (output/"profile.json").write_text(json.dumps(profile, indent=2))
     (output/"external-start.json").write_text(json.dumps(relative(*anchors).tolist()))
     print(json.dumps(summary))
@@ -106,6 +144,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--with-odom", action="store_true", help="Include measured CARMEN ODOM on its IPC clock")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Choose a new output directory")
@@ -113,5 +152,5 @@ if __name__ == "__main__":
     with TemporaryDirectory(dir=args.output.parent) as temp:
         stage = Path(temp)/"data"
         stage.mkdir()
-        prepare(args.source, stage)
+        prepare(args.source, stage, args.with_odom)
         stage.rename(args.output)
