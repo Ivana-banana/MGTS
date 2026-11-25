@@ -12,7 +12,7 @@ from .solve_manifest import bag_files, digest
 
 
 def identity(mapping, profile, pairs, settings):
-    mapping = Path(mapping)
+    mapping = Path(mapping).resolve()
     sources = sorted((p for p in files('mgts_nav').iterdir() if p.name.endswith('.py')),
                      key=lambda p: p.name)
     return dict(
