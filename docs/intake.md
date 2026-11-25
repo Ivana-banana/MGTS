@@ -62,6 +62,8 @@ python -m mgts_nav.solve data/mapping data/inspection --config configs/official-
 $cfg = (Get-Content -Raw -Encoding utf8 $draft | ConvertFrom-Json).profile
 $cfg.base_from_lidar_xyz_m = $xyz
 $cfg.base_from_lidar_xyzw = $xyzw
+$cfg.height_band_m = $heightBandM
+$cfg.max_sync_gap_s = $maxSyncGapS
 $cfg.imu = $null
 $cfg.PSObject.Properties.Remove('imu_frame')
 $cfg.PSObject.Properties.Remove('base_from_imu_xyzw')
