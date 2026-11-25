@@ -118,5 +118,6 @@ def test_absolute_time_on_accelerating_platform_and_bad_fields():
     with pytest.raises(ValueError, match="supported type"):
         point_offsets(msg, spec, valid)
     msg.data = np.array([-1.], dtype="<f4")
+    msg.point_step = msg.row_step = msg.data.nbytes
     with pytest.raises(ValueError, match="nonnegative"):
         point_offsets(msg, dict(spec, semantics="backward"), valid)

@@ -37,6 +37,10 @@ def mapping_fixture(source, target, case):
                     msg.data = np.copy(msg.data[:msg.row_step])
                     raw = store.serialize_cdr(msg, c.msgtype)
                     dropped = stamp(msg)
+                if case == 'duplicate_x' and index == 11:
+                    msg = bag.deserialize(raw, c.msgtype)
+                    msg.fields.append(next(f for f in msg.fields if f.name == 'x'))
+                    raw = store.serialize_cdr(msg, c.msgtype)
             writer.write(conns[c.id], t, raw)
     if case == 'partial':
         return dropped
@@ -54,6 +58,7 @@ def commands(bag, office, profile):
     ('height', '"outside_height_band": 200', '"outside_height_band": 200'),
     ('sparse', '"too_few_points": 200', '"too_few_points": 200'),
     ('single', 'Too few repeatedly observed occupied cells', 'Too few repeatedly observed occupied cells'),
+    ('duplicate_x', "Duplicate PointCloud2 field 'x'", "Duplicate PointCloud2 field 'x'"),
 ])
 def test_map_and_solve_leave_no_partial_output(office, tmp_path, case, map_reason, solve_reason):
     profile, bag = PROFILE, office/'mapping'

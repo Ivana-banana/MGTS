@@ -48,6 +48,21 @@ def test_invalid_cloud_layout(problem):
         bag.cloud_xyz(msg)
 
 
+@pytest.mark.parametrize('size', [99, 101])
+def test_cloud_payload_must_include_exact_declared_padding(size):
+    msg = organized_cloud()
+    msg.data = bytearray(size)
+    with pytest.raises(ValueError, match=f'{size} bytes, expected 100'):
+        bag.cloud_xyz(msg)
+
+
+def test_duplicate_time_field_blocks_deskew():
+    msg = organized_cloud()
+    msg.fields.extend([field('time', 12, 7), field('time', 16, 7)])
+    with pytest.raises(ValueError, match="Duplicate PointCloud2 field 'time'"):
+        bag.point_offsets(msg, {'field': 'time', 'unit': 's'}, np.ones(4, dtype=bool))
+
+
 def test_interpolation_window_requires_brackets_and_contiguous_times():
     times = np.array([0., .1, .2, .8, .9])
     window = bag.interval_samples(times, .025, .175, .3)
