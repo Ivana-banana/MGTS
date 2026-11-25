@@ -45,3 +45,28 @@ $python = '.\.venv-mgts\Scripts\python.exe'
 ```powershell
 & $python -m tools.heap1_drift out/heap1-long-result/map/trajectory.csv out/heap1-long-data/mapping-reference.csv
 ```
+## Высотный срез облака при повторном посещении
+
+На карте из 300 сканов поднятие верхней границы среза с 1,50 до 2,50 м уменьшило RMSE обхода с 39,23 до 25,88 см. При повторном посещении с тем же срезом ICP отклонил все 60 сканов даже с известной стартовой позой. Выбор среза по одной ошибке обхода привёл бы здесь к потере локализации на инспекции.
+
+| Высота в системе корпуса, м | RMSE обхода, см | Ошибка конца обхода, см | Автостарт delayed | Привязки инспекции с заданным стартом | RMSE инспекции, см |
+|---|---:|---:|---|---:|---:|
+| 0,15…1,50 | 39,23 | 62,70 | отказ | 60/60 | 32,62 |
+| 0,15…2,50 | 25,88 | 41,45 | отказ | 0/60 | траектория отсутствует |
+| −0,15…1,50 | 45,36 | 71,87 | отказ | 52/60 | 35,66 |
+
+Во всех трёх обходах первая поза задала начало карты, остальные 299 сканов сопоставились. Для известного старта использована первая поза CPT7, для RMSE — все доступные позы решения на метках CPT7, включая восемь прогнозов в последней строке. Три карты построены одинаковым C++-ядром. У исходного среза PGM, YAML и CSV обхода побайтово совпали с ранее опубликованным контролем Python. Все прочие параметры профиля и разрешение 8 см сохранены. [План сравнения](https://github.com/Ivana-banana/MGTS/issues/91)
+
+Для повтора создайте две копии `out/heap1-long-80/profile.json`, изменив в каждой только массив `height_band_m` по таблице. Для каждой копии выполните команды ниже с отдельными именами выходных каталогов. [Сборка DLL](native-grid.md)
+
+```powershell
+$data = 'out/heap1-long-80'
+$python = '.\.venv-mgts\Scripts\python.exe'
+$cfg = 'out/upper.json'
+$map = 'out/upper-map'
+& $python -m mgts_nav map "$data/mapping" --config $cfg --grid-dll out/native-grid-backend-25/native_grid.dll --out $map
+& $python -m mgts_nav.metrics "$map/trajectory.csv" "$data/mapping-reference.csv"
+& $python -m mgts_nav localize "$data/inspection" --config $cfg --map "$map/map.yaml" --start-search delayed --out out/upper-auto
+$p = Import-Csv "$data/inspection-reference.csv" | Select-Object -First 1
+& $python -m mgts_nav localize "$data/inspection" --config $cfg --map "$map/map.yaml" --initial $p.x $p.y $p.yaw --out out/upper-seeded
+```
