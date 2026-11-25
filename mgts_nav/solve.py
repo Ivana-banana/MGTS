@@ -17,7 +17,7 @@ from .grid import DEFAULT_RESOLUTION, check_resolution
 from .metrics import read_csv
 from .ros_export import export
 from .slam import checked_pose, read_initial_pose
-from .solve_manifest import bag_files
+from .solve_manifest import bag_files, digest
 from .zones import load_zones, read_visits, write_visits
 
 
@@ -103,6 +103,18 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             mapping_visual_pairs = shutil.copyfile(mapping_visual_pairs, profiles / 'mapping-pairs.jsonl')
         if inspection_visual_pairs is not None:
             inspection_visual_pairs = shutil.copyfile(inspection_visual_pairs, profiles / 'inspection-pairs.jsonl')
+        settings = dict(
+            resolution=resolution, close_loop=close_loop, mapping_velocity_prior=mapping_velocity_prior,
+            grid_backend='cpp' if grid_dll is not None else 'python',
+            grid_dll_sha256=digest(Path(grid_dll)) if grid_dll is not None else None,
+            initial=initial.tolist() if initial is not None else None, start_search=start_search,
+            confirm_start=confirm_start, recover=recover,
+            mapping_visual_pairs=mapping_visual_pairs is not None,
+            inspection_visual_pairs=inspection_visual_pairs is not None,
+            zones=zones is not None, zone_max_gap=zone_max_gap,
+        )
+        (stage / 'solve-options.json').write_text(json.dumps(settings, indent=2, allow_nan=False),
+                                                  encoding='utf-8')
         if zones is not None:
             shutil.copyfile(zones, profiles / 'zones.json')
             polygons = load_zones(profiles / 'zones.json')

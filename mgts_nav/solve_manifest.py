@@ -14,6 +14,7 @@ REQUIRED = (
     "map/summary.json", "map/trajectory.csv", "inspection/summary.json", "inspection/trajectory.csv",
 )
 OPTIONAL = (
+    "solve-options.json",
     "profiles/mapping-pairs.jsonl", "profiles/inspection-pairs.jsonl",
     "profiles/zones.json", "inspection/zone-visits.csv",
     "map/route.png", "map/loop.json", "inspection/route.png", "inspection/continuous.csv",
