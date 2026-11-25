@@ -69,3 +69,4 @@ $p = '.\.venv-mgts\Scripts\python.exe'
 ```powershell
 & .\.venv-mgts\Scripts\python.exe -m tools.heap1_stationary_start out/heap1-heldout out/heap1-revisit-map/map.yaml out/heap1-stationary-comparison
 ```
+При отказе явного `--start-search` команды `localize` и `solve` выводят в stderr строку `Start search refused: ` с JSON. В ней указаны метод, причина и уже вычисленные показатели. У многосканового поиска массив `anchors` содержит индексы рассмотренных сканов, оценки поддержки и причины отклонения отдельных кандидатов. Если проверка остановилась ещё до глобального поиска, массив может быть пустым. Для сохранения диагностики добавьте к команде PowerShell `2> start-errors.txt`.

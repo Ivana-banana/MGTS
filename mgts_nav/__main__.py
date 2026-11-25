@@ -58,7 +58,11 @@ def run(args, output):
         search = getattr(args, 'start_search', None)
         if search:
             from .delayed_start import search_prefix
-            start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            try:
+                start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            except ValueError as exc:
+                report = dict(method=search, reason=str(exc), **search_diagnostics)
+                raise ValueError(f'Start search refused: {json.dumps(report, allow_nan=False)}') from exc
             stream = chain(prefix, stream)
             start_method = search
         elif automatic:
