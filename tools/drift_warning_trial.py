@@ -45,12 +45,13 @@ def evaluate(rows, truth, index):
     start = previous = None
     for t, pose, predictions in rows:
         target = interpolate(truth, times, t, gap)
-        if target is None or predictions is None:
+        if target is None:
             start = None
             continue
         large = np.linalg.norm(pose[:2] - target[1:3]) > .20
-        alert = predictions[index]
-        record(tally, alert, large)
+        alert = predictions[index] if predictions is not None else None
+        if alert is not None:
+            record(tally, alert, large)
         if large:
             if start is None or t - previous > .25:
                 start = t

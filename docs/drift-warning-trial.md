@@ -27,3 +27,11 @@
 & .\.venv-mgts\Scripts\python.exe -m tools.drift_warning_trial out/heap1-heldout-37/inspection out/heap1-heldout-37/profile.json out/heap1-long-score-80-repeat/map/map.yaml out/issue160-inputs/long/2620/trajectory.csv out/issue160-inputs/truth/2620.csv
 & .\.venv-mgts\Scripts\python.exe -m tools.drift_warning_trial out/session3-eval-v1/data/inspection configs/example.json out/session3-eval-v1/map/map.yaml out/session3-eval-v1/loc/trajectory.csv out/session3-eval-v1/data/inspection_truth.csv --odom drift
 ~~~
+
+## Движущаяся инспекция KITTI
+
+Траектория с известным стартом повторилась до 10⁻⁸ м/рад на всех 40 метках. Все 40 статусов были prediction_only, поэтому оба правила, рассчитанные на matched, дали нулевое покрытие и TP/FP/TN/FN = 0/0/0/0. Внешняя опора показывает один эпизод ошибки свыше 20 см, пропущенный целиком. Задержка первого сигнала не определена. Ноль ложных сигналов в минуту при таком покрытии ничего не говорит о надёжности. Результат одинаков при отсутствии поступательной одометрии, с интегрированием измеренных скоростей OXTS и с добавлением дрейфа. Относительные углы берутся из угловой скорости OXTS. У OXTS общие источники ошибок с навигационной опорой KITTI, поэтому этот канал нельзя считать полностью независимым от оценщика.
+
+~~~powershell
+& .\.venv-mgts\Scripts\python.exe -m tools.kitti_warning_trial out/kitti161 out/kitti161-run
+~~~
