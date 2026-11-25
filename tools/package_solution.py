@@ -41,6 +41,7 @@ FILES = tuple(sorted((
     'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg', 'tools/custom_lidar.py',
     'docs/drift-warning-trial.md', 'docs/independent-icp.md', 'docs/kitti-repeat.md',
     'docs/jury-field-example.html', 'tools/jury_report.py',
+    'docs/ray-start-trial.md', 'tools/ray_start_trial.py',
     'docs/stable-occupancy-trial.md', 'tools/stable_occupancy_trial.py',
     'tools/drift_warning_trial.py', 'tools/independent_icp.py', 'tools/kitti_repeat.py', 'tools/kitti_warning_trial.py',
     'docs/angular-recovery-controls.md', 'docs/camera-diagnosis.csv', 'docs/camera-diagnosis.md',
