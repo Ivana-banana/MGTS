@@ -23,6 +23,7 @@ def test_interpolation_wraps_yaw():
     assert result["coverage"] == 1
     assert result["ate_xy_rmse_m"] == 0
     assert result["rpe_rotation_rmse_rad"] == pytest.approx(0)
+    assert result["absolute_yaw_rmse_rad"] == pytest.approx(0)
 
 
 def test_no_extrapolation_or_motion_across_gaps():
@@ -34,6 +35,28 @@ def test_no_extrapolation_or_motion_across_gaps():
     missing = evaluate(estimate, [Pose(5, 5, 0, 0)])
     assert missing["coverage"] == 0
     assert missing["ate_xy_rmse_m"] is None
+    assert missing["absolute_yaw_rmse_rad"] is None
+    assert all(value is None for key, value in missing.items() if key.startswith("max_"))
+
+
+def test_peak_errors_on_reference_clock():
+    estimate = [Pose(10, 0, 0, math.radians(179)), Pose(12, 0, 0, math.radians(-179))]
+    truth = [Pose(9, 100, 0, 0), Pose(10, 0, 0, math.radians(-171)),
+             Pose(11, 3, 4, math.pi), Pose(12, 3, 4, estimate[-1].yaw)]
+    result = evaluate(estimate, truth)
+    assert (result["max_xy_error_m"], result["max_xy_error_t"]) == (5, 11)
+    assert result["max_absolute_yaw_error_rad"] == pytest.approx(math.radians(10))
+    assert result["max_absolute_yaw_error_t"] == 10
+
+
+def test_constant_heading_bias_while_stationary(tmp_path):
+    estimate, truth = (tmp_path / name for name in ("estimate.csv", "truth.csv"))
+    for path, degrees in ((estimate, -175), (truth, 175)):
+        yaw = math.radians(degrees)
+        path.write_text(f"t,x,y,yaw\n0,0,0,{yaw}\n1,0,0,{yaw}\n")
+    result = json.loads(subprocess.check_output([sys.executable, "-m", "mgts_nav.metrics", estimate, truth]))
+    assert result["absolute_yaw_rmse_rad"] == pytest.approx(math.radians(10))
+    assert result["ate_xy_rmse_m"] == result["rpe_rotation_rmse_rad"] == 0
 
 
 def test_cli_accepts_extra_columns(tmp_path):

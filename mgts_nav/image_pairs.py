@@ -1,10 +1,13 @@
-"""Extract visual_fusion JSONL from consecutive rectified sensor_msgs/Image frames."""
+"""Extract visual_fusion JSONL from rectified raw or JPEG/PNG camera frames."""
 import argparse
+from io import BytesIO
 import json
 from pathlib import Path
+import re
 from tempfile import NamedTemporaryFile
 
 import numpy as np
+from PIL import Image
 from scipy.ndimage import gaussian_filter, maximum_filter
 from scipy.spatial.distance import cdist
 
@@ -23,6 +26,27 @@ def gray(msg):
         return pixels.astype(float)
     rgb = pixels.reshape(h, w, 3)
     return (rgb if msg.encoding == 'rgb8' else rgb[:, :, ::-1]) @ [0.299, 0.587, 0.114]
+
+
+def compressed_gray(msg, size):
+    fmt = re.fullmatch(r'(?:(mono8|rgb8|bgr8)\s*;\s*)?(jpeg|png)(?:\s+compressed(?:\s+(?:mono8|rgb8|bgr8))?)?',
+                       msg.format.strip().lower())
+    if not fmt:
+        raise ValueError(f'Unsupported compressed image format {msg.format!r}')
+    payload = BytesIO(msg.data.tobytes())
+    try:
+        with Image.open(payload) as image:
+            if image.format.lower() != fmt[2] or image.mode not in ('L', 'RGB'):
+                raise ValueError('Unexpected compressed image codec or pixel mode')
+            if list(image.size) != size or min(image.size) < 11:
+                raise ValueError('Image resolution differs from calibration')
+            image.verify()
+        payload.seek(0)
+        with Image.open(payload) as image:
+            pixels = np.asarray(image)
+            return pixels.astype(float) if image.mode == 'L' else pixels @ [0.299, 0.587, 0.114]
+    except (OSError, SyntaxError) as exc:
+        raise ValueError('Invalid compressed image payload') from exc
 
 
 def features(image):
@@ -66,8 +90,9 @@ def convert(bag_path, topic, calibration, offset, output, motion=None, distance=
         raise ValueError('Invalid time offset, motion bound or minimum range')
     with reader(bag_path) as bag:
         conns = [c for c in bag.connections if c.topic == topic]
-        if not conns or any(c.msgtype != 'sensor_msgs/msg/Image' for c in conns):
-            raise ValueError(f'Expected sensor_msgs/Image on {topic}')
+        if not conns or any(c.msgtype not in ('sensor_msgs/msg/Image', 'sensor_msgs/msg/CompressedImage')
+                            for c in conns):
+            raise ValueError(f'Expected Image or CompressedImage on {topic}')
         with NamedTemporaryFile(dir=output.parent, delete=False) as tmp:
             staged = Path(tmp.name)
         try:
@@ -76,11 +101,16 @@ def convert(bag_path, topic, calibration, offset, output, motion=None, distance=
             with staged.open('w', encoding='utf-8') as stream:
                 for conn, _, raw in bag.messages(connections=conns):
                     msg = bag.deserialize(raw, conn.msgtype)
-                    if (msg.header.frame_id != calibration['frame_id']
-                            or [msg.width, msg.height] != calibration['size']):
-                        raise ValueError('Image frame or resolution differs from calibration')
+                    if msg.header.frame_id != calibration['frame_id']:
+                        raise ValueError('Image frame differs from calibration')
+                    if conn.msgtype == 'sensor_msgs/msg/CompressedImage':
+                        raster = compressed_gray(msg, calibration['size'])
+                    else:
+                        if [msg.width, msg.height] != calibration['size']:
+                            raise ValueError('Image resolution differs from calibration')
+                        raster = gray(msg)
                     t = stamp(msg) + offset
-                    current = features(gray(msg))
+                    current = features(raster)
                     if previous is not None:
                         if t <= last:
                             raise ValueError('Camera header timestamps must increase')

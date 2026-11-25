@@ -29,3 +29,23 @@ if ($LASTEXITCODE -ne 0) { throw 'Рабочие исходники отлича
 ```
 
 Репетиции нужен новый выходной каталог. Она создаёт синтетические записи обхода и инспекции и проверяет карту, локализацию и сравнение с одометрией.
+
+### Проверить команды непосредственно из ZIP
+
+Из корня MGTS запустите проверку выпуска:
+
+```powershell
+& $python -m pytest -q -s tests/test_package.py
+```
+
+Тест собирает архив из HEAD, проверяет загрузку диагностических команд из ZIP и запускает полный `solve` на синтетической паре из рабочего дерева и из архива. Сравниваются байты карты, траекторий обхода и инспекции, плотной траектории и кинематической одометрии. При запуске из ZIP все дочерние этапы используют тот же архив. Интерпретатор и внешние зависимости должны быть установлены в окружении.
+
+Для полевого повтора подготовьте запись согласно [руководству HEAP-1](public-data.md). Переменные `$python` и `$archive` задаются при сборке выше. Обработка и проверка могут выполняться непосредственно из ZIP.
+
+```powershell
+$launch = "import sys,runpy; sys.path.insert(0,sys.argv.pop(1)); runpy.run_module(sys.argv.pop(1),run_name='__main__',alter_sys=True)"
+$d = 'out/heap1-revisit-v2'
+$o = 'out/packed-heap1-solve'
+& $python -I -c $launch $archive mgts_nav.solve "$d/mapping" "$d/inspection" --config "$d/profile.json" --start-search delayed --out $o
+if ($LASTEXITCODE -eq 0) { & $python -I -c $launch $archive mgts_nav.solve_audit "$d/mapping" "$d/inspection" $o }
+```

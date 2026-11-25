@@ -78,6 +78,23 @@ def cloud_xyz(msg):
     return np.column_stack([cloud_field(msg, name, {7: 'f4', 8: 'f8'}) for name in 'xyz'])
 
 
+def point_offsets(msg, spec, finite):
+    """Seconds from the raw lidar header; clock correction cancels in this difference."""
+    mode = spec.get('semantics', 'signed')
+    formats = {8: 'f8'} if mode == 'absolute' else {3: 'i2', 4: 'u2', 5: 'i4', 6: 'u4', 7: 'f4', 8: 'f8'}
+    values = cloud_field(msg, spec['field'], formats)[finite].astype(float)
+    if not np.isfinite(values).all():
+        raise ValueError('Non-finite per-point time offsets')
+    if mode == 'absolute':
+        return values - stamp(msg)
+    scale = {'s': 1.0, 'ms': 1e-3, 'us': 1e-6, 'ns': 1e-9}[spec['unit']]
+    if mode == 'backward':
+        if np.any(values < 0):
+            raise ValueError('Backward point_time durations must be nonnegative')
+        scale = -scale
+    return values * scale
+
+
 def connections(bag, cfg):
     result = {}
     for key, typ in [('lidar', 'sensor_msgs/msg/PointCloud2'), ('imu', 'sensor_msgs/msg/Imu'),
@@ -98,9 +115,19 @@ def check_frame(actual, expected):
 
 
 def load_config(path):
-    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    def unique_fields(pairs):
+        fields = {}
+        for key, value in pairs:
+            if key in fields:
+                raise ValueError(f'{path}: duplicate profile field {key!r}')
+            fields[key] = value
+        return fields
+
+    cfg = json.loads(Path(path).read_text(encoding='utf-8-sig'), object_pairs_hook=unique_fields)
     if not isinstance(cfg, dict) or cfg.get('status') == 'draft':
         raise ValueError(f'{path}: expected a sensor profile. Complete the draft and save its profile object.')
+    if 'gravity_level' in cfg and not isinstance(cfg['gravity_level'], bool):
+        raise ValueError(f'{path}: gravity_level must be JSON true or false')
     names = ['lidar', 'lidar_frame']
     vectors = {'height_band_m': 2, 'base_from_lidar_xyz_m': 3, 'base_from_lidar_xyzw': 4}
     for role in ('imu', 'odom'):
@@ -143,6 +170,11 @@ def load_config(path):
         if (not isinstance(point_time, dict) or not isinstance(point_time.get('field'), str)
                 or not point_time['field'].strip() or point_time.get('unit') not in ('s', 'ms', 'us', 'ns')):
             raise ValueError('point_time requires a field name and unit s/ms/us/ns')
+        mode = point_time.get('semantics', 'signed')
+        if set(point_time) - {'field', 'unit', 'semantics'} or mode not in ('signed', 'backward', 'absolute'):
+            raise ValueError('point_time supports field, unit and semantics signed/backward/absolute')
+        if mode == 'absolute' and point_time['unit'] != 's':
+            raise ValueError('Absolute point_time requires float64 seconds on the raw lidar header clock')
     if point_time is not None and cfg['odom'] is None:
         raise ValueError('Deskew requires a kinematic odometry topic')
     if cfg.get('gravity_level') and cfg['imu'] is None:
@@ -185,6 +217,45 @@ def interval_samples(times, start, end, gap):
     return s
 
 
+def imu_values(msg, rotation, level_scans):
+    has_rate = msg.angular_velocity_covariance[0] != -1
+    w = msg.angular_velocity
+    value = rotation.apply([w.x, w.y, w.z]).tolist() if has_rate else [0.] * 3
+    has_tilt = False
+    if level_scans:
+        has_acc = msg.linear_acceleration_covariance[0] != -1
+        acc = msg.linear_acceleration
+        value.extend(rotation.apply([acc.x, acc.y, acc.z]) if has_acc else [0.] * 3)
+        has_tilt = has_rate and has_acc
+    return value, has_rate, has_tilt
+
+
+def imu_rates(gyro, gyro_available, tilt_available, cfg):
+    gt = gyro[:, 0]
+    gap = cfg['max_sync_gap_s']
+    gyro_available = np.asarray(gyro_available, dtype=bool)
+    bias = np.zeros(3)
+    if len(gt) and cfg['stationary_s'] > 0:
+        end = gt[0] + cfg['stationary_s']
+        if interval_samples(gt, gt[0], end, gap) is None:
+            raise ValueError('Insufficient IMU coverage in configured stationary segment')
+        samples = gyro[(gt <= end) & gyro_available, 1:4]
+        bias = np.median(samples, axis=0) if len(samples) else np.full(3, np.nan)
+    rates = gyro[:, 1:4] - bias
+    rates[~gyro_available] = np.nan
+    yaw_rate = rates[:, 2]
+    leveler = None
+    if cfg.get('gravity_level', False):
+        leveler = build_leveler(gt, gyro[:, 1:4], gyro[:, 4:7], cfg['stationary_s'], gap,
+                                available=tilt_available)
+        # ZYX Euler yaw derivative for a body pitched and rolled relative to gravity.
+        up = leveler.up_in_base[:, 1:]
+        den = np.sum(up**2, axis=1)
+        yaw_rate = np.divide(np.sum(up * rates[:, 1:], axis=1), den,
+                             out=np.full_like(den, np.nan), where=den > 0.05)
+    return yaw_rate, leveler
+
+
 def scans(path, cfg):
     lidar_rot = Rotation.from_quat(cfg['base_from_lidar_xyzw'])
     offset = np.asarray(cfg['base_from_lidar_xyz_m'], dtype=float)
@@ -195,6 +266,8 @@ def scans(path, cfg):
     with reader(path) as bag:
         conns = connections(bag, cfg)
         motion = {'odom': [], 'imu': []}
+        gyro_available = []
+        tilt_available = []
         for key in motion:
             if not conns[key]:
                 motion[key] = np.empty((0, 4))
@@ -203,11 +276,10 @@ def scans(path, cfg):
                 m = bag.deserialize(raw, conn.msgtype)
                 check_frame(m.header.frame_id, cfg[f'{key}_frame'])
                 if key == 'imu':
-                    w = m.angular_velocity
-                    value = imu_rot.apply([w.x, w.y, w.z]).tolist()
+                    value, has_rate, has_tilt = imu_values(m, imu_rot, level_scans)
+                    gyro_available.append(has_rate)
                     if level_scans:
-                        acc = m.linear_acceleration
-                        value.extend(imu_rot.apply([acc.x, acc.y, acc.z]))
+                        tilt_available.append(has_tilt)
                 else:
                     check_frame(m.child_frame_id, cfg['base_frame'])
                     p, q = m.pose.pose.position, m.pose.pose.orientation
@@ -221,22 +293,7 @@ def scans(path, cfg):
         odom, gyro = motion['odom'], motion['imu']
         odom[:, 3] = np.unwrap(odom[:, 3])
         gt = gyro[:, 0]
-        bias = np.zeros(3)
-        if len(gt) and cfg['stationary_s'] > 0:
-            end = gt[0] + cfg['stationary_s']
-            if interval_samples(gt, gt[0], end, gap) is None:
-                raise ValueError('Insufficient IMU coverage in configured stationary segment')
-            bias = np.median(gyro[gt <= end, 1:4], axis=0)
-        rates = gyro[:, 1:4] - bias
-        yaw_rate = rates[:, 2]
-        leveler = None
-        if level_scans:
-            leveler = build_leveler(gt, gyro[:, 1:4], gyro[:, 4:7], cfg['stationary_s'], gap)
-            # ZYX Euler yaw derivative for a body pitched and rolled relative to gravity.
-            up = leveler.up_in_base[:, 1:]
-            den = np.sum(up**2, axis=1)
-            yaw_rate = np.divide(np.sum(up * rates[:, 1:], axis=1), den,
-                                 out=np.full_like(den, np.nan), where=den > 0.05)
+        yaw_rate, leveler = imu_rates(gyro, gyro_available, tilt_available, cfg)
         last = None
         for conn, _, raw in bag.messages(connections=conns['lidar']):
             m = bag.deserialize(raw, conn.msgtype)
@@ -253,17 +310,14 @@ def scans(path, cfg):
             xyz = xyz @ lidar_rot.as_matrix().T + offset
             point_time = cfg.get('point_time')
             if point_time is not None and len(xyz):
-                unit = {'s': 1.0, 'ms': 1e-3, 'us': 1e-6, 'ns': 1e-9}[point_time['unit']]
-                formats = {3: 'i2', 4: 'u2', 5: 'i4', 6: 'u4', 7: 'f4', 8: 'f8'}
-                elapsed = cloud_field(m, point_time['field'], formats)[finite].astype(float) * unit
-                if not np.isfinite(elapsed).all():
-                    raise ValueError('Non-finite per-point time offsets')
+                elapsed = point_offsets(m, point_time, finite)
                 begin, end = t + min(0, elapsed.min()), t + max(0, elapsed.max())
-                if interval_samples(odom[:, 0], begin, end, gap) is None:
+                span = interval_samples(odom[:, 0], begin, end, gap)
+                if span is None:
                     reason = 'deskew_odom_unavailable'
                     xyz = xyz[:0]
                 else:
-                    xyz = deskew_points(xyz, elapsed, t, odom, gap)
+                    xyz = deskew_points(xyz, elapsed, t, odom[span], gap)
             origin = offset
             if leveler is not None:
                 try:

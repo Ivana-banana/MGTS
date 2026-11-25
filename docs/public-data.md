@@ -1,8 +1,30 @@
 # Независимая запись для проверки локализации
 
-Для первого реального прогона выбран **GrandTour, Heap Testsite 1 (HEAP-1)**. Это валидационная миссия ANYmal-D из коллекции Robotic Systems Lab, ETH Zürich. Работа с одним маршрутом позволяет проверить чтение датчиков, координатные системы и одометрию. Проверка повторной инспекции на ранее построенной карте потребует двух проходов по общему участку. [Миссия в списке COMFORT](https://grand-tour.leggedrobotics.com/tasks/localization)
+Для первого реального прогона выбран **GrandTour, Heap Testsite 1 (HEAP-1)**. Это валидационная миссия ANYmal-D из коллекции Robotic Systems Lab, ETH Zürich. На двух отрезках одного полевого маршрута проверены чтение датчиков, построение карты и локализация при повторном посещении. Записи организаторов ожидаются в [№6](https://github.com/Ivana-banana/MGTS/issues/6). [Миссия в списке COMFORT](https://grand-tour.leggedrobotics.com/tasks/localization)
 
 Данные распространяются под CC BY-SA 4.0. При распространении производных данных укажите авторов, источник, лицензию и внесённые изменения и примените ту же лицензию. Карточка набора приводит библиографическую запись работы Frey и др. о Boxi (RSS 2025). [Лицензия на сайте проекта](https://grand-tour.leggedrobotics.com/) · [Карточка и цитирование](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset)
+
+## Что получилось на открытой записи
+
+![Карта по 40 сканам обхода, инспекция из 60 сканов рядом с опорой CPT7 и ошибка XY на интервале 5,9 с](heap1-field.png)
+
+Карта построена по кадрам Velodyne 150–189. После возвращения робота режим `--start-search delayed` определил начало инспекции по сканам, и все 60 меток кадров 2560–2619 получили привязку. Опора CPT7 использована для последующего сравнения. Среднеквадратичная ошибка XY за 5,9 с составила 4,82 см. На карте белые клетки свободны, чёрные заняты, серые остались неизвестными. [Запуск полного решения](delayed-start.md)
+
+Источник рисунка — полевые измерения Robotic Systems Lab, ETH Zürich. MGTS преобразовал XYZ и IMU в ROS 2 bag, построил карту, оценил маршрут и наложил опорную траекторию. Производный рисунок распространяется под CC BY-SA 4.0. [Файлы миссии от 14 ноября 2024 года](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset/tree/af6b6dd6f91696f8ec8c98134e195514834911b2/2024-11-14-13-45-37) · [Лицензия](https://creativecommons.org/licenses/by-sa/4.0/)
+
+```powershell
+python -m tools.plot_heap1_revisit out/heap1-blind-solve out/heap1-revisit-v2/inspection-reference.csv out/heap1-field.png
+```
+
+Для проверки артефактов этого прогона эталон CPT7 не требуется. На исходных bag семантический аудит сверил 40 сканов обхода, 60 сканов инспекции, карту и все 60 опубликованных поз RViz. Первая метка экспорта — 1731588668081259000 нс, последняя — 1731588673981606000 нс. SHA-манифест подтвердил 16 файлов. При перестановке записей аудит вернул код 2 и указал на первую несовпадающую метку в `map/trajectory.csv`.
+
+```powershell
+$data = 'out/heap1-revisit-v2'
+$result = 'out/heap1-blind-solve'
+python -m mgts_nav.solve_audit "$data/mapping" "$data/inspection" $result
+python -m mgts_nav.solve_manifest create "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+```
 
 ## Подключение
 
@@ -72,7 +94,7 @@ $seed = (Get-Content out/heap1-map/summary.json -Raw | ConvertFrom-Json).final_p
 Запустить в том же окружении с `numcodecs`, что и предыдущую проверку. Для автостарта ожидается диагностический выход с кодом 2. Сравнение обоих режимов использует одну карту и один bag инспекции.
 
 ```powershell
-$python = '..\Transport_MSK\.venv\Scripts\python.exe'
+$python = '.\.venv-mgts\Scripts\python.exe'
 & $python tools/heap1_revisit.py out/heap1-revisit-v2
 $data = 'out/heap1-revisit-v2'
 & $python -m mgts_nav map "$data/mapping" --config "$data/profile.json" --out out/heap1-revisit-map
@@ -80,4 +102,10 @@ $data = 'out/heap1-revisit-v2'
 $p = Import-Csv "$data/inspection-reference.csv" | Select-Object -First 1
 & $python -m mgts_nav localize "$data/inspection" --map out/heap1-revisit-map/map.yaml --config "$data/profile.json" --initial $p.x $p.y $p.yaw --out out/heap1-revisit-seeded-v2
 & $python -m mgts_nav.metrics out/heap1-revisit-seeded-v2/trajectory.csv "$data/inspection-reference.csv"
+```
+
+Для сохранённой траектории слепого старта из №48 команда ниже сопоставила все 60 меток с CPT7. Среднеквадратичная ошибка положения составила 4,82 см, абсолютная ошибка курса (`absolute_yaw_rmse_rad`) — 0,00725 рад, или 0,416°. Метрика курса использует кратчайшую угловую разницу в системе карты на каждой сопоставленной метке.
+
+```powershell
+& $python -m mgts_nav.metrics out/heap1-full-blind-48/inspection/trajectory.csv "$data/inspection-reference.csv"
 ```

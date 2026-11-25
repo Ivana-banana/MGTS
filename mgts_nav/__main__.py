@@ -29,6 +29,14 @@ def initial_pose(args):
     return None
 
 
+def scan_rejections(estimates):
+    rejected = {}
+    for row in estimates:
+        if row.rejection_reason is not None:
+            rejected.setdefault(row.rejection_reason, []).append(row.t)
+    return dict(counts={reason: len(times) for reason, times in rejected.items()}, timestamps_s=rejected)
+
+
 def run(args, output):
     cfg = load_config(args.config)
     stream = scans(args.bag, cfg)
@@ -39,6 +47,7 @@ def run(args, output):
     start = initial_pose(args)
     automatic = start is None
     start_method = 'map_origin' if args.command == 'map' else 'provided'
+    search_diagnostics = {}
     recovery = None
     if args.command == 'localize':
         map_path = args.map
@@ -46,7 +55,13 @@ def run(args, output):
         if args.recover:
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
-        if automatic:
+        search = getattr(args, 'start_search', None)
+        if search:
+            from .delayed_start import search_prefix
+            start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            stream = chain(prefix, stream)
+            start_method = search
+        elif automatic:
             from .initialization import estimate_initial
             first = next(stream, None)
             if first is None:
@@ -92,11 +107,19 @@ def run(args, output):
                 endpoints['last'] = scan.xy
                 yield scan
         estimates = list(track(capture_endpoints(), start, grid=grid))
+        if not estimates:
+            raise ValueError(f'No lidar messages on {cfg["lidar"]} (scans=0)')
+        rejections = scan_rejections(estimates)
+        map_counts = Counter(row.status for row in estimates)
+        detail = (f'scans={len(estimates)}, status={json.dumps(map_counts)}, '
+                  f'rejections={json.dumps(rejections["counts"])}')
+        if not map_counts['origin']:
+            raise ValueError(f'No usable scan initialized the map: {detail}')
         if args.close_loop:
             from .loop import diagnose
             from .pose_graph import adjust
             if len(estimates) < 3:
-                raise ValueError('Too few estimates to evaluate endpoint loop')
+                raise ValueError(f'Too few estimates to evaluate endpoint loop: {detail}')
             poses = np.array([r.pose for r in estimates])
             loop = diagnose(endpoints['first'], endpoints['last'], poses)
             if loop['loop_supported']:
@@ -107,11 +130,15 @@ def run(args, output):
                     if row.status != 'prediction_only':
                         grid.observe(world(scan.origin, pose), world(scan.xy, pose))
             (output / 'loop.json').write_text(json.dumps(loop, indent=2), encoding='utf-8')
-        grid.save(output)
+        try:
+            grid.save(output)
+        except ValueError as exc:
+            raise ValueError(f'{exc}: {detail}') from exc
         map_path = output / 'map.yaml'
     elif args.command == 'localize':
         estimates = list(track(stream, start, map_points=points, recovery=recovery,
                                surface=args.wall_surface))
+        rejections = scan_rejections(estimates)
     else:
         first = None
         with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
@@ -131,15 +158,9 @@ def run(args, output):
     if not estimates:
         raise ValueError('No scans in recording')
     counts = Counter(r.status for r in estimates)
-    if args.command == 'localize':
-        rejected = {}
-        for row in estimates:
-            if row.rejection_reason is not None:
-                rejected.setdefault(row.rejection_reason, []).append(row.t)
-        rejection_counts = {reason: len(times) for reason, times in rejected.items()}
-        if not counts['matched']:
-            raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
-                             f'Rejections: {json.dumps(rejection_counts)}')
+    if args.command == 'localize' and not counts['matched']:
+        raise ValueError('No scan matched the map. Check initial pose, frames and height band. '
+                         f'Rejections: {json.dumps(rejections["counts"])}')
     with (output / 'trajectory.csv').open('w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['t', 'x', 'y', 'yaw', 'status', 'inlier_fraction'])
@@ -148,11 +169,12 @@ def run(args, output):
     preview(map_path, output / 'route.png', estimates)
     summary = dict(scans=len(estimates), status=counts, final_pose=estimates[-1].pose.tolist(),
                    final_status=estimates[-1].status, initial_pose=start.tolist(),
-                   initialization=start_method)
+                   initialization=start_method, scan_rejections=rejections)
+    if search_diagnostics:
+        summary['start_search'] = search_diagnostics
     if args.command == 'localize':
         from .quality import inspection_quality
         summary['quality'] = inspection_quality(estimates)
-        summary['scan_rejections'] = dict(counts=rejection_counts, timestamps_s=rejected)
     if visual_stats:
         summary['visual_yaw'] = visual_stats
     if recovery is not None:
@@ -183,6 +205,8 @@ def main():
             group.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
             group.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
         if name == 'localize':
+            from .delayed_start import START_SEARCHES
+            group.add_argument('--start-search', choices=START_SEARCHES, help='Choose a global pose search')
             group.add_argument('--confirm-start', action='store_true',
                                help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')

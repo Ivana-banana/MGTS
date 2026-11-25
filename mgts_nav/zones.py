@@ -2,6 +2,7 @@
 import argparse
 import csv
 from dataclasses import dataclass
+from fractions import Fraction
 import json
 from math import hypot, isfinite
 from pathlib import Path
@@ -9,6 +10,38 @@ import sys
 
 
 COLUMNS = ('zone', 'first_inside_t', 'last_inside_t', 'entry_observed', 'exit_observed', 'samples')
+
+
+def turn(a, b, c):
+    return (b[0]-a[0]) * (c[1]-a[1]) - (b[1]-a[1]) * (c[0]-a[0])
+
+
+def intersect(a, b, c, d):
+    for axis in (0, 1):
+        if max(a[axis], b[axis]) < min(c[axis], d[axis]) or max(c[axis], d[axis]) < min(a[axis], b[axis]):
+            return False
+    return turn(a, b, c) * turn(a, b, d) <= 0 and turn(c, d, a) * turn(c, d, b) <= 0
+
+
+def validate_ring(name, vertices):
+    # Test the topology of the parsed coordinates without rounding a near miss into a crossing.
+    points = [(Fraction(x), Fraction(y)) for x, y in vertices]
+    if points[-1] == points[0]:
+        points.pop()
+    if len(points) < 3 or len(set(points)) != len(points):
+        raise ValueError(f'Too few or repeated vertices in zone {name!r}')
+    edges = list(zip(points, points[1:] + points[:1]))
+    for i, (a, b) in enumerate(edges):
+        c = edges[(i+1) % len(edges)][1]
+        if turn(a, b, c) == 0 and (a[0]-b[0])*(c[0]-b[0]) + (a[1]-b[1])*(c[1]-b[1]) > 0:
+            raise ValueError(f'Overlapping adjacent edges in zone {name!r}')
+        for j in range(i+2, len(edges)):
+            if i == 0 and j == len(edges)-1:
+                continue  # First and last edges share their endpoint.
+            if intersect(a, b, *edges[j]):
+                raise ValueError(f'Self-intersection in zone {name!r} at edges {i+1} and {j+1}')
+    if abs(sum(ax * by - bx * ay for (ax, ay), (bx, by) in edges)) < 1e-12:
+        raise ValueError(f'Degenerate polygon: {name!r}')
 
 
 def load_zones(path):
@@ -26,10 +59,7 @@ def load_zones(path):
                 type(v) in (float, int) and isfinite(v) for v in point
             ):
                 raise ValueError(f'Invalid vertex in {name!r}')
-        edges = zip(vertices, vertices[1:] + vertices[:1])
-        area2 = sum(ax * by - bx * ay for (ax, ay), (bx, by) in edges)
-        if abs(area2) < 1e-12:
-            raise ValueError(f'Degenerate polygon: {name!r}')
+        validate_ring(name, vertices)
     return zones
 
 
@@ -97,6 +127,19 @@ def visits(rows, zones, max_gap):
     return sorted(report, key=lambda row: (row[1], row[0]))
 
 
+def read_visits(trajectory, zones, max_gap):
+    with trajectory.open(encoding='utf-8-sig', newline='') as source:
+        rows = csv.DictReader(source)
+        if not {'t', 'x', 'y', 'status'}.issubset(rows.fieldnames or []):
+            raise ValueError('Expected columns t, x, y, status')
+        return visits(rows, zones, max_gap)
+
+
+def write_visits(path, result):
+    with path.open('x', encoding='utf-8', newline='') as output:
+        csv.writer(output).writerows([COLUMNS, *result])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('trajectory', type=Path)
@@ -106,14 +149,9 @@ def main():
     args = parser.parse_args()
     try:
         zones = load_zones(args.zones)
-        with args.trajectory.open(encoding='utf-8-sig', newline='') as source:
-            rows = csv.DictReader(source)
-            if not {'t', 'x', 'y', 'status'}.issubset(rows.fieldnames or []):
-                raise ValueError('Expected columns t, x, y, status')
-            result = visits(rows, zones, args.max_gap)
+        result = read_visits(args.trajectory, zones, args.max_gap)
         if args.out:
-            with args.out.open('x', encoding='utf-8', newline='') as output:
-                csv.writer(output).writerows([COLUMNS, *result])
+            write_visits(args.out, result)
         else:
             csv.writer(sys.stdout, lineterminator='\n').writerows([COLUMNS, *result])
     except (OSError, ValueError, TypeError) as exc:
