@@ -139,7 +139,8 @@ def run(args, output):
             raise ValueError(f'{exc}: {detail}') from exc
         map_path = output / 'map.yaml'
     elif args.command == 'localize':
-        estimates = list(track(stream, start, map_points=points, recovery=recovery))
+        estimates = list(track(stream, start, map_points=points, recovery=recovery,
+                               surface=args.wall_surface))
         rejections = scan_rejections(estimates)
     else:
         first = None
@@ -177,6 +178,7 @@ def run(args, output):
     if args.command == 'localize':
         from .quality import inspection_quality
         summary['quality'] = inspection_quality(estimates)
+        summary['map_points'] = 'wall_surface' if args.wall_surface else 'cell_centres'
     if visual_stats:
         summary['visual_yaw'] = visual_stats
     if recovery is not None:
@@ -213,6 +215,9 @@ def main():
                                help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
             p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
+            p.add_argument('--wall-surface', action='store_true',
+                           help='Experimental: match well-constrained scans to the wall surface, '
+                                'not raw cell centres')
     args = parser.parse_args()
     try:
         if args.command == 'inspect':

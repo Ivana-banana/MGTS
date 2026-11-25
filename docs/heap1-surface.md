@@ -16,3 +16,5 @@
 ```powershell
 & .\.venv-mgts\Scripts\python.exe -m tools.heap1_surface_trial out/heap1-revisit-v2 out/heap1-heldout out/heap1-revisit-map/map.yaml
 ```
+
+Скрипт теперь также считает вариант `projection`: проекцию на стену с проверкой наблюдаемости, которую включает `localize --wall-surface`. Таблица выше относится только к первой версии. Для `projection` на HEAP-1 результатов пока нет, см. [accuracy-experiment.md](accuracy-experiment.md).
