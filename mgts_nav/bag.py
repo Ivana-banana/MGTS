@@ -318,6 +318,10 @@ def imu_rates(gyro, gyro_available, tilt_available, cfg):
 
 
 def scans(path, cfg):
+    yield from scans_from_reader(reader(path), cfg)
+
+
+def scans_from_reader(source, cfg):
     lidar_rot = Rotation.from_quat(cfg['base_from_lidar_xyzw'])
     offset = np.asarray(cfg['base_from_lidar_xyz_m'], dtype=float)
     imu_rot = Rotation.from_quat(cfg['base_from_imu_xyzw']) if cfg['imu'] is not None else None
@@ -326,7 +330,7 @@ def scans(path, cfg):
     level_scans = cfg.get('gravity_level', False)
     point_time = cfg.get('point_time')
     gyro_deskew = point_time is not None and point_time.get('motion') == 'gyro'
-    with reader(path) as bag:
+    with source as bag:
         conns = connections(bag, cfg)
         motion = {'odom': [], 'imu': []}
         gyro_available = []

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from mgts_nav.calibration import collect, extrinsics
+from mgts_nav.calibration import collect, extrinsics, fit_floor
 
 
 def edge(parent, child, x, angle=0):
@@ -31,3 +31,15 @@ def test_conflicting_or_missing_static_transform():
         collect(edges, edge('base', 'lidar', 3))
     with pytest.raises(ValueError, match='No static TF path'):
         extrinsics(edges, 'base', 'lidar', 'imu')
+    assert extrinsics(edges, 'base', 'lidar')['base_from_lidar_xyz_m'] == [2, 0, 0]
+
+
+def test_floor_tilt_requires_two_dimensional_support():
+    x, y = np.meshgrid(np.linspace(-4, 4, 20), np.linspace(-3, 3, 18))
+    cloud = np.column_stack([x.ravel(), y.ravel(), (.1*x+.2*y).ravel()])
+    result = fit_floor(cloud)
+    assert result['floor_fraction'] == 1
+    assert result['floor_rise_pitch_deg'] == pytest.approx(np.degrees(np.arctan(.1)))
+    cloud[:, 1] = 0
+    with pytest.raises(ValueError, match='constrain'):
+        fit_floor(cloud)
