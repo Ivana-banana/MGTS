@@ -4,7 +4,7 @@ import pytest
 from mgts_nav.bag import Scan
 from mgts_nav.grid import Grid
 from mgts_nav import slam
-from tools.heap1_velocity_prior import VelocityPrior, velocity_track
+from mgts_nav.slam import VelocityPrior
 
 
 def scan(t, xy=None, gyro=0.):
@@ -50,7 +50,7 @@ def test_synthetic_sideways_then_stop():
         stream.append(scan(i*.1, fixed-pose[:2]))
     prior = VelocityPrior()
     baseline = list(slam.track(stream, np.zeros(3), grid=Grid(.08)))
-    experimental = list(velocity_track(stream, Grid(.08), prior))
+    experimental = list(slam.track(stream, np.zeros(3), grid=Grid(.08), velocity_prior=prior))
     for rows in (baseline, experimental):
         assert [r.status for r in rows] == ["origin"] + ["matched"]*23
         errors = np.linalg.norm(np.array([r.pose[:2] for r in rows])-np.array(truth)[:, :2], axis=1)
@@ -58,3 +58,17 @@ def test_synthetic_sideways_then_stop():
               "stopped mm", 1000*np.sqrt(np.mean(errors[13:]**2)))
         assert np.max(errors) < .02
     assert prior.applied == 21
+
+
+@pytest.mark.parametrize("gyro,expected_yaw", [(None, .4), (.06, .06)])
+def test_kinematics_take_priority_and_reset_history(gyro, expected_yaw):
+    prior = VelocityPrior()
+    pose = np.zeros(3)
+    prior.observe(slam.Estimate(0., np.array([-.12, 0., 0.]), "matched", 1.))
+    prior.observe(slam.Estimate(.1, pose.copy(), "matched", 1.))
+    current = scan(.2, gyro=gyro)
+    current.odom = np.array([0., .03, .4])
+    prediction = prior.predict(pose, np.zeros(3), current)
+    np.testing.assert_allclose(prediction, [0., .03, expected_yaw])
+    assert prior.applied == 0
+    assert not prior.history

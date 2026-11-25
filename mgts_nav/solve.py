@@ -29,7 +29,7 @@ def module_command(module, *args):
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
-          start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION):
+          start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION, mapping_velocity_prior=False):
     check_resolution(resolution)
     if (zones is None) != (zone_max_gap is None):
         raise ValueError('Supply --zones and --zone-max-gap together')
@@ -66,6 +66,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         def invoke(*args):
             subprocess.run(module_command('mgts_nav', *args), check=True)
         map_flags = ['--resolution', resolution]
+        if mapping_velocity_prior:
+            map_flags.append('--mapping-velocity-prior')
         if close_loop:
             map_flags.append('--close-loop')
         if grid_dll is not None:
@@ -132,6 +134,8 @@ if __name__ == '__main__':
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
     parser.add_argument('--resolution', type=float, default=DEFAULT_RESOLUTION, help='Grid cell size in metres')
+    parser.add_argument('--mapping-velocity-prior', action='store_true',
+                        help='Use the experimental translation prior during mapping')
     parser.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS occupancy-grid DLL for mapping')
     parser.add_argument('--mapping-visual-pairs', type=Path)
     parser.add_argument('--inspection-visual-pairs', type=Path)
@@ -143,6 +147,6 @@ if __name__ == '__main__':
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
               args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap,
-              resolution=args.resolution)
+              resolution=args.resolution, mapping_velocity_prior=args.mapping_velocity_prior)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

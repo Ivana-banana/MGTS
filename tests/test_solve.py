@@ -43,10 +43,16 @@ def test_two_bags_without_any_ground_truth_files_or_start(tmp_path, confirm):
     if confirm:
         subprocess.run([sys.executable, '-m', 'mgts_nav.solve', str(data / 'mapping'),
                         str(data / 'inspection'), '--config', str(PROFILE), '--out', str(result),
-                        '--confirm-start'], check=True)
+                        '--confirm-start', '--mapping-velocity-prior'], check=True)
     else:
         solve(data / 'mapping', data / 'inspection', PROFILE, result)
     summary = json.loads((result / 'inspection' / 'summary.json').read_text())
+    map_summary = json.loads((result / 'map' / 'summary.json').read_text())
+    if confirm:
+        assert map_summary['mapping_velocity_prior_steps'] == 0
+    else:
+        assert 'mapping_velocity_prior_steps' not in map_summary
+    assert 'mapping_velocity_prior_steps' not in summary
     assert summary['initialization'] == ('confirmed_scan_to_map' if confirm else 'scan_to_map')
     inspection = read_csv(result / 'inspection' / 'trajectory.csv')
     assert [row.t for row in inspection] == [row.t for row in truth]

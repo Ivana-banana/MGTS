@@ -1,12 +1,11 @@
 """Experiment #88: bounded body-frame translation prior for lidar-only mapping."""
 import argparse
-from collections import Counter, deque
+from collections import Counter
 import csv
 import json
 from pathlib import Path
 import subprocess
 import sys
-from unittest.mock import patch
 
 import numpy as np
 
@@ -14,45 +13,6 @@ from mgts_nav import slam
 from mgts_nav.bag import load_config, scans
 from mgts_nav.grid import Grid
 from mgts_nav.metrics import evaluate, read_csv
-
-
-class VelocityPrior:
-    def __init__(self):
-        self.history = deque(maxlen=2)
-        self.applied = 0
-
-    def predict(self, pose, previous, scan):
-        result = original_predict(pose, previous, scan)
-        if scan.odom is not None or (self.history and not 0 < scan.t-self.history[-1].t <= .25):
-            self.history.clear()
-        if len(self.history) == 2:
-            a, b = self.history
-            dt = scan.t-b.t
-            step = slam.relative(a.pose, b.pose)[:2] * (dt/(b.t-a.t))
-            length = np.linalg.norm(step)
-            limit = min(1.5*dt, .20)
-            if length > limit:
-                step *= limit/length
-            result[:2] = slam.world(step, b.pose)
-            self.applied += 1
-        return result
-
-    def observe(self, row):
-        if row.status == "matched":
-            self.history.append(row)
-        else:
-            self.history.clear()
-
-
-original_predict = slam.predict
-
-
-def velocity_track(stream, grid, prior):
-    # The patch is confined to this standalone experimental process.
-    with patch.object(slam, "predict", prior.predict):
-        for row in slam.track(stream, np.zeros(3), grid=grid):
-            prior.observe(row)
-            yield row
 
 
 def write_rows(path, rows):
@@ -76,8 +36,8 @@ def experiment(data, baseline, output):
     output.mkdir(parents=True)
     profile = data/"profile.json"
     grid = Grid(.08)
-    prior = VelocityPrior()
-    rows = list(velocity_track(scans(data/"mapping", load_config(profile)), grid, prior))
+    prior = slam.VelocityPrior()
+    rows = list(slam.track(scans(data/"mapping", load_config(profile)), np.zeros(3), grid=grid, velocity_prior=prior))
     if len(rows) != 300:
         raise ValueError("Expected 300 mapping scans")
     grid.save(output)

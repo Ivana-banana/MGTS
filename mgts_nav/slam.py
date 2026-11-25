@@ -54,6 +54,36 @@ def predict(pose, previous, scan):
     return np.r_[world(step[:2], pose), pose[2] + step[2]]
 
 
+class VelocityPrior:
+    """Bounded body-frame translation from consecutive ICP matches during mapping."""
+
+    def __init__(self):
+        self.history = deque(maxlen=2)
+        self.applied = 0
+
+    def predict(self, pose, previous, scan):
+        result = predict(pose, previous, scan)
+        if scan.odom is not None or (self.history and not 0 < scan.t - self.history[-1].t <= .25):
+            self.history.clear()
+        if len(self.history) == 2:
+            a, b = self.history
+            dt = scan.t - b.t
+            step = relative(a.pose, b.pose)[:2] * (dt / (b.t - a.t))
+            length = np.linalg.norm(step)
+            limit = min(1.5 * dt, .20)
+            if length > limit:
+                step *= limit / length
+            result[:2] = world(step, b.pose)
+            self.applied += 1
+        return result
+
+    def observe(self, row):
+        if row.status == "matched":
+            self.history.append(row)
+        else:
+            self.history.clear()
+
+
 def match(scan, tree, seed, radius=0.45):
     """Trimmed point-to-point ICP. Return the prior if support is insufficient."""
     pose = seed.copy()
@@ -99,17 +129,20 @@ class Estimate:
     rejection_reason: str | None = None
 
 
-def track(stream, initial, *, grid=None, map_points=None, recovery=None):
+def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocity_prior=None):
     building = grid is not None
     if building == (map_points is not None):
         raise ValueError('Supply either a grid to build or an existing map')
+    if velocity_prior is not None and not building:
+        raise ValueError("Velocity prior requires a mapping grid")
+    predict_step = predict if velocity_prior is None else velocity_prior.predict
     pose = checked_pose(initial)
     tree = None if building else cKDTree(map_points)
     previous = None
     keyframes = deque(maxlen=18)
     keypose = None
     for scan in stream:
-        predicted = predict(pose, previous, scan)
+        predicted = predict_step(pose, previous, scan)
         previous = scan.odom
         pose, support, status = predicted, 0.0, 'prediction_only'
         if tree is None and len(scan.xy) >= MIN_MATCH_POINTS:
@@ -144,4 +177,7 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None):
                 reason = 'too_few_points'
             else:
                 reason = 'icp_rejected'
-        yield Estimate(scan.t, pose.copy(), status, support, reason)
+        estimate = Estimate(scan.t, pose.copy(), status, support, reason)
+        if velocity_prior is not None:
+            velocity_prior.observe(estimate)
+        yield estimate

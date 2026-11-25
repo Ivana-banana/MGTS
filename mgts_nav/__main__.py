@@ -12,7 +12,7 @@ import numpy as np
 
 from .bag import inspect_bag, load_config, scans
 from .grid import DEFAULT_RESOLUTION, Grid, preview, read_map
-from .slam import checked_pose, read_initial_pose, relative, track, world
+from .slam import VelocityPrior, checked_pose, read_initial_pose, relative, track, world
 
 
 class MissingBaselineAnchor(ValueError):
@@ -109,7 +109,8 @@ def run(args, output):
                 endpoints.setdefault('first', scan.xy)
                 endpoints['last'] = scan.xy
                 yield scan
-        estimates = list(track(capture_endpoints(), start, grid=grid))
+        prior = VelocityPrior() if args.mapping_velocity_prior else None
+        estimates = list(track(capture_endpoints(), start, grid=grid, velocity_prior=prior))
         if not estimates:
             raise ValueError(f'No lidar messages on {cfg["lidar"]} (scans=0)')
         rejections = scan_rejections(estimates)
@@ -172,6 +173,8 @@ def run(args, output):
     summary = dict(scans=len(estimates), status=counts, final_pose=estimates[-1].pose.tolist(),
                    final_status=estimates[-1].status, initial_pose=start.tolist(),
                    initialization=start_method, scan_rejections=rejections)
+    if args.command == 'map' and prior is not None:
+        summary['mapping_velocity_prior_steps'] = prior.applied
     if search_diagnostics:
         summary['start_search'] = search_diagnostics
     if args.command == 'localize':
@@ -199,6 +202,8 @@ def main():
         if name != 'baseline':
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
         if name == 'map':
+            p.add_argument('--mapping-velocity-prior', action='store_true',
+                           help='Predict mapping translation from two matches when odometry is missing')
             p.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS native occupancy-grid DLL')
             p.add_argument('--resolution', default=DEFAULT_RESOLUTION, type=float, help='Grid cell size in metres')
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
