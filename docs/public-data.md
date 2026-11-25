@@ -12,18 +12,25 @@
 
 Источник рисунка — полевые измерения Robotic Systems Lab, ETH Zürich. MGTS преобразовал XYZ и IMU в ROS 2 bag, построил карту, оценил маршрут и наложил опорную траекторию. Производный рисунок распространяется под CC BY-SA 4.0. [Файлы миссии от 14 ноября 2024 года](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset/tree/af6b6dd6f91696f8ec8c98134e195514834911b2/2024-11-14-13-45-37) · [Лицензия](https://creativecommons.org/licenses/by-sa/4.0/)
 
+После подготовки пары записей по разделу «Команды для повторного посещения» создайте решение и рисунок. Для каждого выходного пути выберите новое имя.
+
 ```powershell
-python -m tools.plot_heap1_revisit out/heap1-blind-solve out/heap1-revisit-v2/inspection-reference.csv out/heap1-field.png
+$python = '.\.venv-mgts\Scripts\python.exe'
+$data = 'out/heap1-revisit-v2'
+$result = 'out/heap1-blind-solve'
+& $python -m mgts_nav.solve "$data/mapping" "$data/inspection" --config "$data/profile.json" --start-search delayed --out $result
+& $python -m tools.plot_heap1_revisit $result "$data/inspection-reference.csv" out/heap1-field.png
 ```
 
 Для проверки артефактов этого прогона эталон CPT7 не требуется. На исходных bag семантический аудит сверил 40 сканов обхода, 60 сканов инспекции, карту и все 60 опубликованных поз RViz. Первая метка экспорта — 1731588668081259000 нс, последняя — 1731588673981606000 нс. SHA-манифест подтвердил 16 файлов. При перестановке записей аудит вернул код 2 и указал на первую несовпадающую метку в `map/trajectory.csv`.
 
 ```powershell
+$python = '.\.venv-mgts\Scripts\python.exe'
 $data = 'out/heap1-revisit-v2'
 $result = 'out/heap1-blind-solve'
-python -m mgts_nav.solve_audit "$data/mapping" "$data/inspection" $result
-python -m mgts_nav.solve_manifest create "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
-python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+& $python -m mgts_nav.solve_audit "$data/mapping" "$data/inspection" $result
+& $python -m mgts_nav.solve_manifest create "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
+& $python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $result out/heap1-manifest.json
 ```
 
 ## Подключение
@@ -38,7 +45,7 @@ python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $res
 | `*_anymal_state.bag` | `/anymal/state_estimator/odometry` | Бортовая оценка движения |
 | `*_tf_minimal.bag` | `/tf_static` | Калибровка относительно корпуса |
 
-3. Запустить `python -m mgts_nav inspect PATH_TO_BAG` для каждого файла. Сверить частоты, frame_id, времена, разрывы, поля облака и типы. Для объединённой записи подставить в профиль MGTS фактические топики, кадр корпуса, родительский кадр одометрии и цепочки IMU/LiDAR → корпус из калибровки. Проверить, есть ли неподвижный интервал для оценки смещения гироскопа.
+3. Передать фактический путь к скачанному файлу в `& .\.venv-mgts\Scripts\python.exe -m mgts_nav inspect PATH_TO_BAG` для каждого файла. Сверить частоты, frame_id, времена, разрывы, поля облака и типы. Для объединённой записи подставить в профиль MGTS фактические топики, кадр корпуса, родительский кадр одометрии и цепочки IMU/LiDAR → корпус из калибровки. Проверить, есть ли неподвижный интервал для оценки смещения гироскопа.
 4. Для сравнения с эталоном COMFORT привести точки траектории к раме призмы через калибровку, согласовать время и общую систему отсчёта. Отдельно оценить пригодность плоской модели на наклонных участках. [Требования к системе координат](https://grand-tour.leggedrobotics.com/tasks/localization)
 
 ## Реальный фрагмент HEAP-1
@@ -49,7 +56,7 @@ python -m mgts_nav.solve_manifest verify "$data/mapping" "$data/inspection" $res
 
 ### Воспроизведение из корня MGTS в PowerShell
 
-Для конвертера нужен дополнительный пакет numcodecs. Команды рассчитаны на новые выходные каталоги. Копии исходных данных и результаты остаются в `out/`.
+Сначала установите зависимости в окружение из [README](../README.md). Для конвертера дополнительно нужен numcodecs 0.13.1 и доступ к закреплённой ревизии GrandTour на Hugging Face с поддержкой HTTP Range. Команды рассчитаны на новые выходные каталоги. Подготовленные bag и результаты остаются в `out/`. Автоматическая локализация на этом окне завершается ожидаемым кодом 2; следующая команда проверяет запуск с заданной позой.
 
 ```powershell
 $python = '.\.venv-mgts\Scripts\python.exe'
@@ -104,8 +111,8 @@ $p = Import-Csv "$data/inspection-reference.csv" | Select-Object -First 1
 & $python -m mgts_nav.metrics out/heap1-revisit-seeded-v2/trajectory.csv "$data/inspection-reference.csv"
 ```
 
-Для сохранённой траектории слепого старта из №48 команда ниже сопоставила все 60 меток с CPT7. Среднеквадратичная ошибка положения составила 4,82 см, абсолютная ошибка курса (`absolute_yaw_rmse_rad`) — 0,00725 рад, или 0,416°. Метрика курса использует кратчайшую угловую разницу в системе карты на каждой сопоставленной метке.
+Для решения со слепым стартом из раздела «Что получилось на открытой записи» команда ниже сопоставила все 60 меток с CPT7. Среднеквадратичная ошибка положения составила 4,82 см, абсолютная ошибка курса (`absolute_yaw_rmse_rad`) — 0,00725 рад, или 0,416°. Метрика курса использует кратчайшую угловую разницу в системе карты на каждой сопоставленной метке.
 
 ```powershell
-& $python -m mgts_nav.metrics out/heap1-full-blind-48/inspection/trajectory.csv "$data/inspection-reference.csv"
+& $python -m mgts_nav.metrics out/heap1-blind-solve/inspection/trajectory.csv "$data/inspection-reference.csv"
 ```

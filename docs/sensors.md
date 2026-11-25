@@ -6,7 +6,7 @@
 
 `python -m mgts_nav inspect BAG --inventory` читает состав топиков без декодирования датчиков. Обычный `inspect BAG` дополнительно читает сообщения с заголовками, выводит частоты, разрывы, повторения меток, кадры и поля облака. Разность между временем записи и заголовка включает транспортную задержку. Для поправки часов нужен отдельный источник синхронизации.
 
-```sh
+```powershell
 python -m mgts_nav.calibration BAG --base base_link --lidar lidar_frame --imu imu_frame
 ```
 
@@ -26,16 +26,18 @@ python -m mgts_nav.calibration BAG --base base_link --lidar lidar_frame --imu im
 
 `solve` выдаёт `map/map.yaml` и `map/map.pgm`, `inspection/trajectory.csv`, а при включённой кинематике ещё `inspection/continuous.csv`. В последнем файле `matched` обозначает датированный результат привязки лидарного скана. `prediction_only` обозначает прогноз по штатной одометрии, `anchor_age_s` показывает время с последней привязки. Прогноз не пересекает разрыв самой кинематики. Для трассировки исходные результаты на временах лидара сохраняются отдельно.
 
-```sh
-python -m mgts_nav.loop data/mapping out/official-01/map/trajectory.csv --config configs/official.json
-python -m mgts_nav map data/mapping --close-loop --config configs/official.json --out out/closed
+Для этих команд нужны запись обхода, её проверенный профиль и траектория из [приёмки записей](intake.md). При репетиции замените их на `out/rehearsal-01/data/mapping`, `configs/example.json` и `out/rehearsal-01/map/trajectory.csv` из раздела испытаний ниже.
+
+```powershell
+python -m mgts_nav.loop data/mapping out/official-01/map/trajectory.csv --config configs/official-map.json
+python -m mgts_nav map data/mapping --close-loop --config configs/official-map.json --out out/closed
 ```
 
 Первый вызов проверяет возвращение в стартовую зону по удалению конечных поз, выезду из стартовой зоны и двустороннему перекрытию сканов. Второй, если проверка прошла, добавляет измеренное относительное положение концов к графу поз, оптимизирует его и повторно собирает карту. В обычном синтетическом офисе ATE обхода составила 0,00768 м до и 0,00775 м после оптимизации. По умолчанию включён исходный вариант. Эксперимент проверяет петлю между концами записи, промежуточные петли требуют отдельного детектора.
 
 ## Для защиты
 
-```sh
+```powershell
 rviz2 -d configs/inspection.rviz
 ros2 bag play out/official-01/rviz
 ```
@@ -48,7 +50,10 @@ ros2 bag play out/official-01/rviz
 
 Для сравнения режимов с камерой и без неё доступны [эксперимент на двух записях, метрики и условия отказа](camera-experiment.md).
 
-```sh
+В активированном окружении MGTS выполните из корня проекта в новые каталоги:
+
+```powershell
+python -m mgts_nav.rehearse out/rehearsal-01
 python -m mgts_nav.stress out/rehearsal-01/data --map out/rehearsal-01/map/map.yaml
 python -m mgts_nav.map_eval out/rehearsal-01/map/map.yaml
 python -m mgts_nav.demo out/corridor-41 --layout corridor --seed 41

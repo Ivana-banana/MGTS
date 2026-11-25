@@ -12,9 +12,11 @@
 
 ## Запуск из корня MGTS в Windows PowerShell
 
+Для примера подготовьте офисную репетицию командой `.\.venv-mgts\Scripts\python.exe -X utf8 -m mgts_nav.rehearse out/my-first-demo` из корня MGTS. Один результат репетиции подходит для всех команд этого раздела.
+
 ```powershell
 $python = '.\.venv-mgts\Scripts\python.exe'
-& $python -m mgts_nav.plan_alignment docs/office-plan.png docs/plan-landmarks.json out/inspection-result/trajectory.csv --fit-scale --out out/plan-registration
+& $python -m mgts_nav.plan_alignment docs/office-plan.png docs/plan-landmarks.json out/my-first-demo/inspection/trajectory.csv --fit-scale --out out/plan-registration
 ```
 
 Укажите новый выходной каталог. В `route.png` линия прерывается, когда интервал между позами превышает три медианных интервала записи. При одной или двух позах видны отдельные точки. Если допустимое время известно, задайте его в секундах, например `--gap-s 0.3`. Маршрут включает позы на прогнозе, если они присутствуют во входном CSV. В `alignment.json` сохраняются угол, перенос, масштаб, невязка каждого ориентира в метрах плана и отдельные RMSE по обучающим и контрольным точкам.

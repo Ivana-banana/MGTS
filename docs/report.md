@@ -31,11 +31,13 @@
 
 ## График качества привязки
 
+Для примера подготовьте офисную репетицию командой `.\.venv-mgts\Scripts\python.exe -X utf8 -m mgts_nav.rehearse out/my-first-demo` из корня MGTS. Один результат репетиции подходит для всех команд этого раздела.
+
 После `localize` или `solve` передайте путь к CSV инспекции и новое имя PNG. Для графика нужны три колонки: `t`, `status`, `inlier_fraction`. Порог пропуска совпадает с `summary.json`: интервал больше трёх медианных интервалов между сканами. При одном или двух отсчётах частоты недостаточно для оценки пропусков. График использует время от начала инспекции в секундах. Для перехода к исходному CSV прибавьте к показанию оси напечатанное на графике значение t₀. Для каждого разрыва и серии прогнозов команда также выводит абсолютные метки и номера строк (заголовок — строка 1).
 
 ```powershell
 $python = '.\.venv-mgts\Scripts\python.exe'
-& $python -m tools.plot_quality out/inspection-result/trajectory.csv out/quality-clean.png
+& $python -m tools.plot_quality out/my-first-demo/inspection/trajectory.csv out/quality-clean.png
 ```
 
 Для короткой записи с известной частотой задайте предельный интервал явно, например `--gap-s 0.3` для 0,3 с. Этот параметр действует только при построении графика. Если порог не задан и в записи всего одна или две метки, график показывает отдельные точки и указывает, что период неизвестен.
@@ -45,7 +47,7 @@ $python = '.\.venv-mgts\Scripts\python.exe'
 Чтобы воспроизвести второй рисунок, используйте демоданные и карту из раздела репетиции. Команды создают новые выходные каталоги и PNG.
 
 ```powershell
-& $python -c "from pathlib import Path; from mgts_nav.stress import fault_bag; from mgts_nav.bag import load_config; from mgts_nav.demo import PROFILE; fault_bag(Path('out/demo-agent/inspection'), Path('out/quality-gap-bag'), 'lidar_no_messages', load_config(PROFILE))"
-& $python -m mgts_nav localize out/quality-gap-bag --map out/office-map/map.yaml --config configs/example.json --initial 50 50 0 --recover --out out/quality-gap
+& $python -c "from pathlib import Path; from mgts_nav.stress import fault_bag; from mgts_nav.bag import load_config; from mgts_nav.demo import PROFILE; fault_bag(Path('out/my-first-demo/data/inspection'), Path('out/quality-gap-bag'), 'lidar_no_messages', load_config(PROFILE))"
+& $python -m mgts_nav localize out/quality-gap-bag --map out/my-first-demo/map/map.yaml --config configs/example.json --initial 50 50 0 --recover --out out/quality-gap
 & $python -m tools.plot_quality out/quality-gap/trajectory.csv out/quality-gap.png
 ```
