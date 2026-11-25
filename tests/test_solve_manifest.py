@@ -30,6 +30,7 @@ def test_manifest_cli_relocation_and_mutation(tmp_path):
         path.write_text("{}")
     (solution / "map/map.yaml").write_text("image: floor.pgm\nresolution: 0.1\n")
     (solution / "map/floor.pgm").write_bytes(b"PGM content")
+    (solution / "profiles/inspection-pairs.jsonl").write_text('{"t0":0,"t1":0.1}\n')
     split_bag(solution / "rviz")
     # Only the test data is relocated. The project still executes from the MGTS checkout.
     def invoke(action, bundle, *args):
@@ -52,6 +53,7 @@ def test_manifest_cli_relocation_and_mutation(tmp_path):
     verified = invoke("verify", moved)
     assert verified.returncode == 0, verified.stderr
     for name, label in (("survey/part1.db3", "mapping/part1.db3"),
+                        ("solution/profiles/inspection-pairs.jsonl", "solution/profiles/inspection-pairs.jsonl"),
                         ("solution/inspection/trajectory.csv", "solution/inspection/trajectory.csv")):
         path = moved / name
         old = path.read_bytes()

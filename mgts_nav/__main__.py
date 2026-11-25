@@ -11,8 +11,8 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from .bag import inspect_bag, load_config, scans
-from .grid import Grid, preview, read_map
-from .slam import relative, track, world
+from .grid import DEFAULT_RESOLUTION, Grid, preview, read_map
+from .slam import checked_pose, read_initial_pose, relative, track, world
 
 
 class MissingBaselineAnchor(ValueError):
@@ -23,9 +23,9 @@ def initial_pose(args):
     if args.command == 'map':
         return np.zeros(3)
     if args.initial is not None:
-        return np.array(args.initial)
+        return checked_pose(args.initial)
     if args.initial_file is not None:
-        return np.array(json.loads(args.initial_file.read_text(encoding='utf-8-sig')), dtype=float)
+        return read_initial_pose(args.initial_file)
     return None
 
 
@@ -58,7 +58,11 @@ def run(args, output):
         search = getattr(args, 'start_search', None)
         if search:
             from .delayed_start import search_prefix
-            start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            try:
+                start, prefix = search_prefix(stream, search, pixels, meta, search_diagnostics)
+            except ValueError as exc:
+                report = dict(method=search, reason=str(exc), **search_diagnostics)
+                raise ValueError(f'Start search refused: {json.dumps(report, allow_nan=False)}') from exc
             stream = chain(prefix, stream)
             start_method = search
         elif automatic:
@@ -92,8 +96,7 @@ def run(args, output):
                         del following
                     start_method = 'confirmed_scan_to_map'
             stream = chain(prefix, stream)
-    if start.shape != (3,) or not np.isfinite(start).all():
-        raise ValueError('initial pose must contain finite x, y, yaw')
+    start = checked_pose(start)
     if args.command == 'map':
         grid_factory = Grid
         if getattr(args, 'grid_dll', None):
@@ -199,7 +202,7 @@ def main():
             p.add_argument('--visual-pairs', type=Path, help='Optional calibrated feature pairs in JSONL')
         if name == 'map':
             p.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS native occupancy-grid DLL')
-            p.add_argument('--resolution', default=0.08, type=float, help='Grid cell size in metres')
+            p.add_argument('--resolution', default=DEFAULT_RESOLUTION, type=float, help='Grid cell size in metres')
             p.add_argument('--close-loop', action='store_true', help='Optimize poses if endpoint revisit is supported')
         else:
             group = p.add_mutually_exclusive_group(required=name == 'baseline')

@@ -8,6 +8,28 @@ from mgts_nav.bag import inspect_bag
 from mgts_nav.demo import PROFILE, generate
 from mgts_nav.metrics import evaluate, read_csv
 from mgts_nav.solve import solve
+from mgts_nav.slam import read_initial_pose
+
+
+@pytest.mark.parametrize('content', ['[1,2]', '[0,1e999,0]', '[true,0,0]', '{"x":1}', 'broken'])
+def test_invalid_pose_file_names_path(tmp_path, content):
+    path = tmp_path / 'start.json'
+    path.write_text(content, encoding='utf-8-sig')
+    with pytest.raises(ValueError, match='start.json'):
+        read_initial_pose(path)
+
+
+@pytest.mark.parametrize('resolution', [0.009, 1.01, float('nan'), float('inf')])
+def test_invalid_resolution_rejected_before_bags(tmp_path, resolution):
+    with pytest.raises(ValueError, match='resolution'):
+        solve('unused', 'unused', PROFILE, tmp_path/'result', resolution=resolution)
+    assert not (tmp_path/'result').exists()
+
+
+def test_nonfinite_start_rejected_before_bags(tmp_path):
+    with pytest.raises(ValueError, match='finite x, y, yaw'):
+        solve('unused', 'unused', PROFILE, tmp_path/'result', initial=[1, 2, float('nan')])
+    assert not (tmp_path/'result').exists()
 
 
 @pytest.mark.parametrize("confirm", [False, True])

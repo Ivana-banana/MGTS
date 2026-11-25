@@ -61,13 +61,19 @@ def inspect_bag(path, inventory=False):
 
 def cloud_field(msg, name, formats):
     order = '>' if msg.is_bigendian else '<'
-    fields = {f.name: f for f in msg.fields}
-    f = fields.get(name)
-    if f is None or f.datatype not in formats or f.count != 1:
+    fields = [f for f in msg.fields if f.name == name]
+    if len(fields) > 1:
+        raise ValueError(f'Duplicate PointCloud2 field {name!r}')
+    if not fields or fields[0].datatype not in formats or fields[0].count != 1:
         raise ValueError(f'PointCloud2 needs a scalar field {name!r} with supported type')
+    f = fields[0]
     dtype = np.dtype(order + formats[f.datatype])
     if f.offset < 0 or f.offset + dtype.itemsize > msg.point_step or msg.row_step < msg.width * msg.point_step:
         raise ValueError('Invalid PointCloud2 strides/offsets')
+    expected = msg.height * msg.row_step
+    actual = memoryview(msg.data).nbytes
+    if actual != expected:
+        raise ValueError(f'PointCloud2 data has {actual} bytes, expected {expected} (height * row_step)')
     if not msg.width or not msg.height:
         return np.empty(0)
     return np.ndarray((msg.height, msg.width), dtype, buffer=msg.data,

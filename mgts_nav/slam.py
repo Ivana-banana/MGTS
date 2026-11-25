@@ -1,6 +1,7 @@
 """Planar scan matching in map coordinates, with body-frame motion increments."""
 from collections import deque
 from dataclasses import dataclass
+import json
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -11,6 +12,27 @@ MIN_MATCH_POINTS = 12
 SURFACE_RADIUS_CELLS = 1.5   # 3x3 cell neighbourhood
 SURFACE_MAX_RATIO = 0.4      # smaller/larger spread of a line-like neighbourhood
 SURFACE_MIN_WALL_M = 1.5     # wall length that must constrain the weakest direction
+
+
+def checked_pose(values):
+    error = 'initial pose must contain finite x, y, yaw'
+    try:
+        pose = np.asarray(values, dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(error) from exc
+    if pose.shape != (3,) or not np.isfinite(pose).all():
+        raise ValueError(error)
+    return pose
+
+
+def read_initial_pose(path):
+    try:
+        values = json.loads(path.read_text(encoding='utf-8-sig'))
+        if not isinstance(values, list) or not all(type(v) in (float, int) for v in values):
+            raise ValueError('expected JSON array of numbers [x, y, yaw]')
+        return checked_pose(values)
+    except ValueError as exc:
+        raise ValueError(f'{path}: {exc}') from exc
 
 
 def rotation(yaw):
@@ -191,9 +213,7 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, surface
     building = grid is not None
     if building == (map_points is not None):
         raise ValueError('Supply either a grid to build or an existing map')
-    pose = np.asarray(initial, dtype=float)
-    if pose.shape != (3,) or not np.isfinite(pose).all():
-        raise ValueError('initial pose must contain finite x, y, yaw')
+    pose = checked_pose(initial)
     tree = None if building else cKDTree(map_points)
     targets = WallSurface(tree) if surface and tree is not None else None
     previous = None

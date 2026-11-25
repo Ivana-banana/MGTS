@@ -10,7 +10,9 @@ from tempfile import TemporaryDirectory
 
 from .bag import check_recording
 from .delayed_start import START_SEARCHES
+from .grid import DEFAULT_RESOLUTION, check_resolution
 from .ros_export import export
+from .slam import checked_pose, read_initial_pose
 from .zones import load_zones, read_visits, write_visits
 
 
@@ -27,7 +29,8 @@ def module_command(module, *args):
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
           mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
-          start_search=None, zones=None, zone_max_gap=None):
+          start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION):
+    check_resolution(resolution)
     if (zones is None) != (zone_max_gap is None):
         raise ValueError('Supply --zones and --zone-max-gap together')
     if zone_max_gap is not None and (not isfinite(zone_max_gap) or zone_max_gap <= 0):
@@ -36,6 +39,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         raise ValueError('--start-search requires a supported search and conflicts with --initial and --confirm-start')
     if initial is not None and confirm_start:
         raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
+    if initial is not None:
+        initial = checked_pose(initial)
     output = Path(output)
     if output.exists():
         raise FileExistsError(f'Choose a new output directory: {output}')
@@ -49,6 +54,10 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         profiles.mkdir()
         shutil.copyfile(profile, profiles / 'mapping.json')
         shutil.copyfile(inspection_profile or profile, profiles / 'inspection.json')
+        if mapping_visual_pairs is not None:
+            mapping_visual_pairs = shutil.copyfile(mapping_visual_pairs, profiles / 'mapping-pairs.jsonl')
+        if inspection_visual_pairs is not None:
+            inspection_visual_pairs = shutil.copyfile(inspection_visual_pairs, profiles / 'inspection-pairs.jsonl')
         if zones is not None:
             shutil.copyfile(zones, profiles / 'zones.json')
             polygons = load_zones(profiles / 'zones.json')
@@ -56,7 +65,9 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
         cfg = check_recording(inspection, profiles / 'inspection.json')
         def invoke(*args):
             subprocess.run(module_command('mgts_nav', *args), check=True)
-        map_flags = ['--close-loop'] if close_loop else []
+        map_flags = ['--resolution', resolution]
+        if close_loop:
+            map_flags.append('--close-loop')
         if grid_dll is not None:
             map_flags.extend(['--grid-dll', grid_dll])
         if mapping_visual_pairs:
@@ -117,16 +128,21 @@ if __name__ == '__main__':
     start.add_argument('--confirm-start', action='store_true',
                        help='Verify an accepted single-scan start using later scans and odometry')
     start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'))
+    start.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--close-loop', action='store_true')
+    parser.add_argument('--resolution', type=float, default=DEFAULT_RESOLUTION, help='Grid cell size in metres')
     parser.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS occupancy-grid DLL for mapping')
     parser.add_argument('--mapping-visual-pairs', type=Path)
     parser.add_argument('--inspection-visual-pairs', type=Path)
     parser.add_argument('--recover', action='store_true')
     args = parser.parse_args()
     try:
+        if args.initial_file is not None:
+            args.initial = read_initial_pose(args.initial_file)
         solve(args.mapping, args.inspection, args.config, args.out, args.inspection_config,
               args.initial, args.close_loop, args.mapping_visual_pairs, args.inspection_visual_pairs,
-              args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap)
+              args.recover, args.confirm_start, args.grid_dll, args.start_search, args.zones, args.zone_max_gap,
+              resolution=args.resolution)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(2, f'{exc}\n')

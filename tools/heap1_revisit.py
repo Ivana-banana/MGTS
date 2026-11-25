@@ -79,8 +79,12 @@ def reference(times, transforms):
     return np.column_stack((aligned[:, :2], np.arctan2(np.sin(yaw-yaw[0]), np.cos(yaw-yaw[0]))))
 
 
-def prepare(stage, held_out=False):
-    visits = dict(VISITS, inspection=(2620, 2800)) if held_out else VISITS
+def prepare(stage, held_out=False, long_mapping=False):
+    visits = VISITS.copy()
+    if held_out:
+        visits["inspection"] = (2620, 2800)
+    if long_mapping:
+        visits["mapping"] = (150, 450)
     with urlopen(f"{ROOT}/metadata/tf.yaml", timeout=30) as reply:
         transforms = yaml.safe_load(reply)
     xyz, quat = extrinsics(transforms, "base", "velodyne_lidar")
@@ -133,6 +137,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
     parser.add_argument("--held-out", action="store_true", help="Use inspection frames 2620 through 2799")
+    parser.add_argument("--long-mapping", action="store_true", help="Use mapping frames 150 through 449")
     args = parser.parse_args()
     output = args.out
     if output.exists():
@@ -141,5 +146,5 @@ if __name__ == "__main__":
     with TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)/"dataset"
         stage.mkdir()
-        prepare(stage, args.held_out)
+        prepare(stage, args.held_out, args.long_mapping)
         stage.rename(output)

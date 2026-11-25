@@ -8,11 +8,18 @@ import yaml
 from PIL import Image, ImageDraw
 
 
+DEFAULT_RESOLUTION = 0.08
+
+
+def check_resolution(resolution):
+    if not isfinite(resolution) or not 0.01 <= resolution <= 1:
+        raise ValueError('resolution must be between 0.01 and 1 metre')
+    return resolution
+
+
 class Grid:
     def __init__(self, resolution):
-        if not np.isfinite(resolution) or not 0.01 <= resolution <= 1:
-            raise ValueError('resolution must be between 0.01 and 1 metre')
-        self.resolution = resolution
+        self.resolution = check_resolution(resolution)
         self.evidence = defaultdict(int)
 
     def observe(self, origin, endpoints):

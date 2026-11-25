@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,6 +9,25 @@ import pytest
 from mgts_nav.demo import PROFILE, generate
 from mgts_nav.metrics import read_csv
 from mgts_nav.solve import solve
+
+
+def test_search_refusal_preserves_slot_diagnostics(monkeypatch, tmp_path):
+    from mgts_nav import __main__ as cli
+    from mgts_nav import delayed_start
+
+    slots = [dict(index=0, score=.45, rejection='Weak final support')]
+    def refuse(stream, method, pixels, meta, diagnostics):
+        diagnostics['anchors'] = slots
+        raise ValueError('Fewer than three accepted global poses')
+
+    monkeypatch.setattr(cli, 'read_map', lambda _: (None, {}, []))
+    monkeypatch.setattr(delayed_start, 'search_prefix', refuse)
+    args = SimpleNamespace(command='localize', bag='unused', map='unused', config=PROFILE,
+                           initial=None, initial_file=None, recover=False, start_search='delayed')
+    with pytest.raises(ValueError, match='^Start search refused: ') as error:
+        cli.run(args, tmp_path)
+    report = json.loads(str(error.value).removeprefix('Start search refused: '))
+    assert report == dict(method='delayed', reason='Fewer than three accepted global poses', anchors=slots)
 
 
 def test_solve_replays_entire_search_window(tmp_path):
