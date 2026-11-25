@@ -18,7 +18,7 @@ MODULES = (
     'motion_disagreement', 'multiscan', 'native_grid', 'observability', 'obstacles', 'plan_alignment',
     'pose_graph', 'profile', 'quality', 'drift_warning', 'recovery', 'rehearse', 'ros_export', 'self_check', 'slam', 'solve',
     'solve_audit', 'solve_manifest', 'start_confirmation', 'start_trial', 'stress', 'sync', 'vision',
-    'visual_fusion', 'zones',
+    'visual_fusion', 'zones', 'event_uncertainty',
 )
 TESTS = (
     'ambiguity', 'aux_cli_input', 'bag', 'calibration', 'camera_demo', 'cli_input_audit',
@@ -33,7 +33,7 @@ TESTS = (
     'ros_export', 'route_preview', 'scan_pair_overlap', 'scan_rejections', 'self_check', 'solve', 'solve_audit',
     'solve_manifest', 'solve_zones', 'split_bags', 'start_confirmation', 'start_search_cli', 'stress',
     'submap_controls', 'sync', 'sync_imu', 'turn_recovery', 'unicode_volume', 'velocity_prior', 'vision',
-    'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones',
+    'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones', 'event_uncertainty',
 )
 FILES = tuple(sorted((
     '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'requirements-win-amd64-py310.lock', 'pytest.ini',
