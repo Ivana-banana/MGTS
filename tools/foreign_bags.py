@@ -1,4 +1,4 @@
-"""Generate four "unfamiliar" recordings for an intake rehearsal of the final.
+"""Generate five "unfamiliar" recordings for an intake rehearsal of the final.
 
 Each scenario differs from mgts_nav.demo in one family of conventions:
 
@@ -11,6 +11,8 @@ c  Organised PointCloud2 with x,y,z float64, intensity, t (uint32 ns from header
    points are measured along the sweep, so the scan is distorted by motion.
 d  No IMU; odometry with covariances and dropouts; header clock is the robot boot clock
    (far from record time) and odometry headers run 0.25 s ahead of the lidar.
+e  Single-plane lidar pitched 6 deg down, so it sees the floor beyond about 3.3 m;
+   the calibration is given in words only. Used to check self_check on a flat scan.
 
 Layout: OUT/<scenario>/data is what a team receives (bags + ORGANIZERS.md);
 OUT/<scenario>/truth holds the reference trajectories and the expected profile.
@@ -449,7 +451,55 @@ def scenario_d(root, seed):
     (truth / 'expected_profile.json').write_text(json.dumps(expected, indent=2), encoding='utf-8')
 
 
-SCENARIOS = dict(a=scenario_a, b=scenario_b, c=scenario_c, d=scenario_d)
+# --------------------------------------------------------------------- scenario e
+def scenario_e(root, seed):
+    data, truth = root / 'data', root / 'truth'
+    data.mkdir(parents=True)
+    truth.mkdir()
+    tilt = Rotation.from_euler('xyz', [0, 6, 0], degrees=True)  # nose down 6 deg
+    lidar_xyz = [0.2, 0.0, 0.35]
+    lidar = Lidar(lidar_xyz, tilt.as_quat(), [0.0], columns=360)
+    expected = dict(lidar='/scan_cloud', imu='/imu', odom='/odom', lidar_frame='laser', imu_frame='imu',
+                    base_frame='base_link', odom_frame='odom', base_from_lidar_xyz_m=lidar_xyz,
+                    base_from_lidar_xyzw=tilt.as_quat().tolist(), base_from_imu_xyzw=[0, 0, 0, 1],
+                    height_band_m=[0.15, 1.5], max_sync_gap_s=0.35, stationary_s=0.5)
+    for i, run in enumerate(('mapping', 'inspection')):
+        rng = np.random.default_rng(seed + i)
+        dur = 20.0 if run == 'mapping' else 10.0
+        start0 = 300_000_000_000 * (i + 1)
+        traj = lambda e, run=run: pose_at(run, e)  # noqa: E731
+        start = traj(0.0)
+        rec = Recording(data / run)
+        for k in range(int(dur * 100) + 1):
+            e = k / 100
+            rec.add(start0 + k * 10_000_000 + 1_000_000, '/imu', IMU,
+                    imu_msg(start0 + k * 10_000_000, 'imu', rate(traj, e), [0, 0, 0, 1], rng))
+        for k in range(int(dur * 20) + 1):
+            e = k / 20
+            ns = start0 + k * 50_000_000
+            local, yaw = drifted(traj, e, start, np.clip(e - 1, 0, dur - 2))
+            rec.add(ns + 2_000_000, '/odom', ODOM, odom_msg(ns, 'odom', 'base_link', local, yaw))
+        rows = []
+        for k in range(int((dur - 0.03) * 10) + 1):
+            e = 0.03 + k / 10
+            ns = start0 + int(round(e * 1e9))
+            pose = traj(e)
+            r = ring_points(lidar, pose, rng, dropout=0.05)
+            keep = np.isfinite(r)
+            xyz = lidar.dirs[keep] * r[keep, None]
+            rec.add(ns + 5_000_000, '/scan_cloud', CLOUD, cloud_msg(ns, 'laser', [
+                ('x', 'f4', xyz[None, :, 0]), ('y', 'f4', xyz[None, :, 1]), ('z', 'f4', xyz[None, :, 2])]))
+            rows.append((ns / 1e9, pose))
+        rec.close()
+        write_truth(truth / f'{run}_truth.csv', rows)
+    (data / 'ORGANIZERS.md').write_text(
+        'Две записи: `mapping/` — обход, `inspection/` — инспекция. Однолучевой лидар в 0.2 м впереди и '
+        '0.35 м выше base_link, наклонён вперёд-вниз на 6°. IMU выровнен с base_link. /tf_static нет. '
+        'В начале каждой записи робот стоит около 1 с.\n', encoding='utf-8')
+    (truth / 'expected_profile.json').write_text(json.dumps(expected, indent=2), encoding='utf-8')
+
+
+SCENARIOS = dict(a=scenario_a, b=scenario_b, c=scenario_c, d=scenario_d, e=scenario_e)
 
 
 def main():
