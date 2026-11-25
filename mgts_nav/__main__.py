@@ -102,7 +102,13 @@ def run(args, output):
                     if row.status != 'prediction_only':
                         grid.observe(world(scan.origin, pose), world(scan.xy, pose))
             (output / 'loop.json').write_text(json.dumps(loop, indent=2), encoding='utf-8')
-        grid.save(output)
+        try:
+            grid.save(output)
+        except ValueError as error:
+            reasons = Counter(r.rejection_reason for r in estimates if r.rejection_reason is not None)
+            raise ValueError(f'{error}. Scans: {len(estimates)}, used: {len(estimates) - sum(reasons.values())}. '
+                             f'Rejections: {json.dumps(dict(reasons))}. Check frames, height band, '
+                             'point_time unit and calibration (python -m mgts_nav.calibration --floor).') from error
         map_path = output / 'map.yaml'
     elif args.command == 'localize':
         estimates = list(track(stream, start, map_points=points, recovery=recovery))
