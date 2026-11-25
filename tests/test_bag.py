@@ -1,4 +1,7 @@
 import struct
+import json
+import subprocess
+import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
 
@@ -6,6 +9,36 @@ import numpy as np
 import pytest
 
 from mgts_nav import bag
+
+
+def test_inspect_laser_scan_changes_and_timing(tmp_path):
+    from rosbags.rosbag2 import Writer
+    from rosbags.typesys import Stores, get_typestore
+    from tools.laser_scan import convert
+
+    store = get_typestore(Stores.ROS2_HUMBLE)
+    types = store.types
+    src = tmp_path / 'laser'
+    with Writer(src, version=8) as writer:
+        conn = writer.add_connection('/scan', 'sensor_msgs/msg/LaserScan', typestore=store)
+        for i, size in enumerate((5, 6, 6)):
+            header = types['std_msgs/msg/Header'](types['builtin_interfaces/msg/Time'](i, 0), 'front')
+            values = np.array([0., .5, 4., np.inf, np.nan, 2.][:size], dtype=np.float32)
+            msg = types[conn.msgtype](header, 0., (size-1)*.1, .1, .01 if i == 0 else 0.,
+                                      .1, .5, 4., values, np.empty(0, np.float32))
+            writer.write(conn, i*10**9, store.serialize_cdr(msg, conn.msgtype))
+    command = [sys.executable, '-m', 'mgts_nav', 'inspect', src]
+    detail = json.loads(subprocess.check_output(command))[0]['laser_scan']
+    assert detail['geometry_changes'] == 1 and detail['scans_without_positive_time_increment'] == 2
+    assert detail['total_beams'] == 17 and detail['valid_ranges'] == 8
+    assert detail['first_geometry']['beams'] == 5
+    assert detail['first_geometry']['angle_increment_rad'] == pytest.approx(.1)
+    assert detail['first_time_increment_s'] == pytest.approx(.01)
+    assert 'laser_scan' not in json.loads(subprocess.check_output([*command, '--inventory']))[0]
+    dst = tmp_path / 'cloud'
+    convert(src, '/scan', dst)
+    with bag.reader(dst) as converted:
+        assert sum(converted.deserialize(raw, c.msgtype).width for c, _, raw in converted.messages()) == 8
 
 
 def field(name, offset, datatype):

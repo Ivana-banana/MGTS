@@ -44,12 +44,21 @@ def stamp(msg):
     return s.sec + s.nanosec * 1e-9
 
 
+def laser_geometry(msg):
+    fields = {'angle_min_rad': msg.angle_min, 'angle_max_rad': msg.angle_max,
+              'angle_increment_rad': msg.angle_increment, 'range_min_m': msg.range_min,
+              'range_max_m': msg.range_max}
+    return dict(beams=len(msg.ranges), **{k: float(v) if np.isfinite(v) else None
+                                         for k, v in fields.items()})
+
+
 def inspect_bag(path, inventory=False):
     """Adapted from Transport_MSK/tools/survey/survey_bags.py; no tram message types."""
     rows = []
     with reader(path) as bag:
         for conn in bag.connections:
             times, lags, frames = [], [], set()
+            previous_geometry = None
             info = dict(topic=conn.topic, type=conn.msgtype, messages=conn.msgcount)
             if inventory:
                 rows.append(info)
@@ -66,6 +75,23 @@ def inspect_bag(path, inventory=False):
                 times.append(s)
                 lags.append(1000 * (t * 1e-9 - s))
                 frames.add(msg.header.frame_id)
+                if conn.msgtype == 'sensor_msgs/msg/LaserScan':
+                    geometry = laser_geometry(msg)
+                    if previous_geometry is None:
+                        step = msg.time_increment
+                        info['laser_scan'] = dict(first_geometry=geometry,
+                                                  first_time_increment_s=float(step) if np.isfinite(step) else None,
+                                                  geometry_changes=0, total_beams=0, valid_ranges=0,
+                                                  scans_without_positive_time_increment=0)
+                    detail = info['laser_scan']
+                    detail['geometry_changes'] += int(previous_geometry is not None and geometry != previous_geometry)
+                    previous_geometry = geometry
+                    ranges = np.asarray(msg.ranges)
+                    detail['total_beams'] += len(ranges)
+                    detail['valid_ranges'] += int(np.count_nonzero(np.isfinite(ranges)
+                                                  & (ranges >= msg.range_min) & (ranges <= msg.range_max)))
+                    detail['scans_without_positive_time_increment'] += int(
+                        not (np.isfinite(msg.time_increment) and msg.time_increment > 0))
                 if hasattr(msg, 'fields') and 'fields' not in info:
                     info['fields'] = [f.name for f in msg.fields]
             if times:
