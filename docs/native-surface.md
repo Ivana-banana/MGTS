@@ -28,8 +28,18 @@ g++ -O3 -std=c++17 -Wall -shared -static -o out/issue190-native/native_surface.d
 
 С `--native` профилировщик не отделяет поиск соседей: `neighbors_ms` равно 0, вся регистрация входит в `rest_of_align_ms`.
 
+## В узле ROS 2
+
+`mgts_nav.ros_localize3d` принимает `--native-dll ПУТЬ`. Без флага узел работает как прежде, через SciPy. С флагом он пишет в журнал `C++ alignment core: ПУТЬ` и использует DLL для `align`. В Linux библиотеку собирают с `-fPIC`:
+
+```bash
+g++ -O3 -std=c++17 -Wall -shared -fPIC -o native_surface.so tools/native_surface.cpp
+python3 -m mgts_nav.ros_localize3d out/issue185/3d/map.npz --timings times.csv --native-dll ./native_surface.so
+```
+
+Проверено в контейнере ros:humble: узел запускается с флагом и публикует `/mgts/map3d` и `/mgts/pose3d`. Полный live replay с флагом не прогонялся. Равенство поз проверено офлайн, выше.
+
 ## Чего нет
 
-- Узел ROS 2 (`ros_localize3d`) DLL не использует. Подключение — отдельное решение после заморозки версии сдачи.
 - Отдельного модульного теста нет; проверка — совпадение поз до 1e-15 м и статусов на полной официальной инспекции.
 - Сборка с MSVC не проверялась, только MinGW g++.

@@ -28,12 +28,16 @@ def stamp(message):
 
 
 class Localizer(Node):
-    def __init__(self, map_file, timings_file, map_from_odom=None):
+    def __init__(self, map_file, timings_file, map_from_odom=None, native_dll=None):
         super().__init__('mgts_localize3d')
         self.alignment = alignment_pose(map_from_odom)
         with np.load(map_file) as data:
             xyz = data['xyz']
         self.surface = SurfaceMap(xyz)
+        if native_dll is not None:
+            from .native_surface import NativeSurface, load_dll
+            self.surface = NativeSurface(self.surface, load_dll(native_dll))
+            self.get_logger().info(f'C++ alignment core: {native_dll}')
         self.filter = CorrectionFilter()
         self.map = self.create_publisher(
             PointCloud2, '/mgts/map3d',
@@ -118,10 +122,12 @@ def main():
     parser.add_argument('map', type=Path)
     parser.add_argument('--timings', type=Path, required=True)
     alignment_argument(parser)
+    parser.add_argument('--native-dll', type=Path,
+                        help='optional library built from tools/native_surface.cpp (same poses, faster)')
     args = parser.parse_args(remove_ros_args()[1:])
     rclpy.init()
     with args.timings.open('x', newline='', encoding='utf-8') as timings:
-        node = Localizer(args.map, timings, args.map_from_odom)
+        node = Localizer(args.map, timings, args.map_from_odom, args.native_dll)
         try:
             rclpy.spin(node)
         except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
