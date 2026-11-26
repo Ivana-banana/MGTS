@@ -74,20 +74,21 @@ def suspected_recording_swap(mapping_route, inspection_route):
 
 
 def solve(mapping, inspection, profile, output, inspection_profile=None, initial=None, close_loop=False,
-          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=False, confirm_start=False, grid_dll=None,
+          mapping_visual_pairs=None, inspection_visual_pairs=None, recover=None, confirm_start=None, grid_dll=None,
           start_search=None, zones=None, zone_max_gap=None, resolution=DEFAULT_RESOLUTION, mapping_velocity_prior=False,
           map_cache=None):
+    from .safe_defaults import resolve_confirm_start, resolve_recover
     check_resolution(resolution)
     if (zones is None) != (zone_max_gap is None):
         raise ValueError('Supply --zones and --zone-max-gap together')
     if zone_max_gap is not None and (not isfinite(zone_max_gap) or zone_max_gap <= 0):
         raise ValueError('--zone-max-gap must be positive and finite')
-    if start_search is not None and (start_search not in START_SEARCHES or initial is not None or confirm_start):
-        raise ValueError('--start-search requires a supported search and conflicts with --initial and --confirm-start')
-    if initial is not None and confirm_start:
-        raise ValueError('--confirm-start requires automatic initialization. Omit --initial.')
+    if start_search is not None and (start_search not in START_SEARCHES or initial is not None):
+        raise ValueError('--start-search requires a supported search and conflicts with --initial')
     if initial is not None:
         initial = checked_pose(initial)
+    confirm_start = resolve_confirm_start(confirm_start, initial=initial, start_search=start_search)
+    recover = resolve_recover(recover)
     output = Path(output)
     if map_cache is not None and (Path(map_cache).resolve().is_relative_to(output.resolve())
                                   or output.resolve().is_relative_to(Path(map_cache).resolve())):
@@ -158,10 +159,8 @@ def solve(mapping, inspection, profile, output, inspection_profile=None, initial
             options.extend(['--start-search', start_search])
         if inspection_visual_pairs:
             options.extend(['--visual-pairs', inspection_visual_pairs])
-        if confirm_start:
-            options.append('--confirm-start')
-        if recover:
-            options.append('--recover')
+        options.append('--confirm-start' if confirm_start else '--no-confirm-start')
+        options.append('--recover' if recover else '--no-recover')
         try:
             invoke('localize', inspection, '--config', profiles / 'inspection.json',
                    '--map', map_dir / 'map.yaml', '--out', result, *options)
@@ -225,11 +224,20 @@ if __name__ == '__main__':
     parser.add_argument('--zone-max-gap', type=float, metavar='SECONDS', help='Largest gap allowed inside a zone visit')
     start = parser.add_mutually_exclusive_group()
     start.add_argument('--start-search', choices=START_SEARCHES)
-    start.add_argument('--confirm-start', action='store_true',
-                       help='Verify an accepted single-scan start using later scans and odometry')
     start.add_argument('--initial', type=float, nargs=3, metavar=('X', 'Y', 'YAW'),
                        help='Map-frame X and Y in metres, YAW in radians')
     start.add_argument('--initial-file', type=Path, help='JSON array [x,y,yaw] in map')
+    confirm = parser.add_mutually_exclusive_group()
+    confirm.add_argument('--confirm-start', action='store_true', dest='confirm_start',
+                         help='Verify an accepted single-scan start using later scans (default for automatic start)')
+    confirm.add_argument('--no-confirm-start', action='store_false', dest='confirm_start',
+                         help='Accept a single-scan start without later confirmation')
+    recover = parser.add_mutually_exclusive_group()
+    recover.add_argument('--recover', action='store_true', dest='recover',
+                         help='Try confirmed global recovery after loss (default)')
+    recover.add_argument('--no-recover', action='store_false', dest='recover',
+                         help='Disable global recovery after localization loss')
+    parser.set_defaults(confirm_start=None, recover=None)
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--map-cache', type=Path, help='Build or verify and reuse a completed mapping stage')
     parser.add_argument('--close-loop', action='store_true')
@@ -239,7 +247,6 @@ if __name__ == '__main__':
     parser.add_argument('--grid-dll', type=Path, help='Use a locally built MGTS occupancy-grid DLL for mapping')
     parser.add_argument('--mapping-visual-pairs', type=Path)
     parser.add_argument('--inspection-visual-pairs', type=Path)
-    parser.add_argument('--recover', action='store_true')
     args = parser.parse_args()
     try:
         if args.initial_file is not None:

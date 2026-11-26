@@ -23,7 +23,8 @@ def test_search_refusal_preserves_slot_diagnostics(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, 'read_map', lambda _: (None, {}, []))
     monkeypatch.setattr(delayed_start, 'search_prefix', refuse)
     args = SimpleNamespace(command='localize', bag='unused', map='unused', config=PROFILE,
-                           initial=None, initial_file=None, recover=False, start_search='delayed')
+                           initial=None, initial_file=None, recover=False, confirm_start=None,
+                           start_search='delayed')
     with pytest.raises(ValueError, match='^Start search refused: ') as error:
         cli.run(args, tmp_path)
     report = json.loads(str(error.value).removeprefix('Start search refused: '))
@@ -47,11 +48,15 @@ def test_solve_replays_entire_search_window(tmp_path):
     assert np.linalg.norm(np.array(summary['initial_pose'][:2])-truth[0][1:3]) < .25
 
 
-@pytest.mark.parametrize('command, flags', [
-    (['mgts_nav', 'localize', 'bag', '--map', 'map'], ['--initial-file', 'pose']),
-    (['mgts_nav.solve', 'mapping', 'inspection'], ['--confirm-start']),
-])
-def test_start_search_conflict_is_caught_before_opening_bags(command, flags):
-    result = subprocess.run([sys.executable, '-m', *command, '--config', 'cfg', '--out', 'unused',
-                             '--start-search', 'coarse', *flags], capture_output=True, text=True)
+def test_start_search_conflict_is_caught_before_opening_bags():
+    result = subprocess.run(
+        [sys.executable, '-m', 'mgts_nav', 'localize', 'bag', '--map', 'map', '--config', 'cfg',
+         '--out', 'unused', '--start-search', 'coarse', '--initial-file', 'pose'],
+        capture_output=True, text=True)
     assert result.returncode == 2 and 'not allowed with argument' in result.stderr
+
+
+def test_confirm_conflicts_with_start_search_before_bags(tmp_path):
+    with pytest.raises(ValueError, match='automatic initialization'):
+        solve('unused', 'unused', PROFILE, tmp_path / 'unused',
+              start_search='coarse', confirm_start=True)

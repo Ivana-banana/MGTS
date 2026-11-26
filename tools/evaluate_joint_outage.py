@@ -98,7 +98,7 @@ def experiment(root, seed):
         result = root/case
         summary = invoke('mgts_nav', 'localize', bag, '--config', PROFILE, '--map', root/'map/map.yaml',
                          '--initial-file', data/'initial_pose.json', '--out', result,
-                         *(['--recover'] if case == 'joint_reset_recover' else []))
+                         '--recover' if case == 'joint_reset_recover' else '--no-recover')
         dense = invoke('mgts_nav.continuous', bag, result/'trajectory.csv', result/'continuous.csv',
                        '--config', PROFILE)
         measurements[case] = dict(**inputs, status=summary['status'], recovery=summary.get('recovery'),

@@ -40,7 +40,7 @@ def test_solve_zones_excludes_prediction_intervals(tmp_path):
     options = json.loads((output/'solve-options.json').read_bytes())
     assert options == dict(resolution=.08, close_loop=False, mapping_velocity_prior=False,
                            grid_backend='python', grid_dll_sha256=None, initial=initial, start_search=None,
-                           confirm_start=False, recover=False, mapping_visual_pairs=False,
+                           confirm_start=False, recover=True, mapping_visual_pairs=False,
                            inspection_visual_pairs=False, zones=True, zone_max_gap=.25)
     assert 'solution/solve-options.json' in hashed
 

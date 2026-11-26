@@ -145,9 +145,10 @@ def record(directory, run, profile, store, seed, layout="office", storage="sqlit
                 xyz = lidar_points(pose, elapsed, profile, rng, walls, 0.35 if layout == "corridor" else 0.10)
                 if camera_stress and 4 <= elapsed < 6:
                     xyz = xyz[:8]
+                payload = np.ascontiguousarray(xyz, dtype=np.float32).view(np.uint8).ravel()
                 message = types[TOPIC_TYPES[key]](
                     header, 1, len(xyz), fields, False, 12, 12 * len(xyz),
-                    xyz.view(np.uint8).ravel(), True)
+                    payload, True)
                 rows.writerow([f"{ns / 1e9:.9f}", *pose])
             elif key == "imu":
                 rate = (trajectory(run, elapsed + 0.001, layout, duration)[2]
