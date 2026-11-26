@@ -41,6 +41,31 @@ def alignment_pose(values):
     return Pose(Rotation.from_euler("z", values[3]), np.array(values[:3]))
 
 
+def frame_arguments(parser):
+    parser.add_argument('--cloud-frame', default='base_link')
+    parser.add_argument('--odom-frame', default='odom')
+    parser.add_argument('--odom-child-frame', default='base_link',
+                        help='Must equal --cloud-frame; sensor extrinsics are not supported')
+
+
+def check_frame_config(cloud_frame, odom_child_frame):
+    if not cloud_frame or not odom_child_frame or cloud_frame != odom_child_frame:
+        raise ValueError('Cloud and odometry child frames must be the same nonempty frame; '
+                         'an explicit sensor transform is required for different frames '
+                         '(not supported by this localizer)')
+
+
+def check_frames(message, topic, expected, expected_child=None):
+    fields = [('header.frame_id', expected, message.header.frame_id)]
+    if expected_child is not None:
+        fields.append(('child_frame_id', expected_child, message.child_frame_id))
+    errors = [f'{field}: expected {want!r}, actual {actual!r}'
+              for field, want, actual in fields if actual != want or not want]
+    if errors:
+        t = message.header.stamp
+        raise ValueError(f'{topic} stamp {t.sec}.{t.nanosec:09d}: ' + '; '.join(errors))
+
+
 class CorrectionFilter:
     """Smooth the map correction while retaining odometry's short-term motion."""
 
@@ -161,9 +186,10 @@ def scan_points(points, offsets):
     return points[keep], offsets[keep]
 
 
-def scans(path):
+def scans(path, cloud_frame='base_link', odom_frame='odom', odom_child_frame='base_link'):
     from .bag import cloud_field, cloud_xyz, reader, stamp
 
+    check_frame_config(cloud_frame, odom_child_frame)
     with reader(path) as bag:
         topics = {conn.topic: conn for conn in bag.connections}
         odom = topics['/utlidar/robot_odom']
@@ -171,12 +197,14 @@ def scans(path):
         times = []
         for _, _, raw in bag.messages(connections=[odom]):
             message = bag.deserialize(raw, odom.msgtype)
+            check_frames(message, odom.topic, odom_frame, odom_child_frame)
             samples.append(odometry_sample(message))
             times.append(stamp(message))
         motion = Motion(times, *zip(*samples))
         lidar = topics['/utlidar/cloud_base']
         for _, _, raw in bag.messages(connections=[lidar]):
             message = bag.deserialize(raw, lidar.msgtype)
+            check_frames(message, lidar.topic, cloud_frame)
             t = stamp(message)
             points, offsets = scan_points(cloud_xyz(message), cloud_field(message, 'time', {7: 'f4'}))
             if len(points) and motion.covers(t + min(0., float(offsets.min())),
@@ -191,11 +219,13 @@ def main():
     parser.add_argument('inspection', type=Path)
     parser.add_argument('--out', type=Path, required=True)
     alignment_argument(parser)
+    frame_arguments(parser)
     args = parser.parse_args()
     alignment = alignment_pose(args.map_from_odom)
     args.out.mkdir(parents=True)
     started = perf_counter()
-    clouds = [pose.apply(points) for _, points, pose, _ in scans(args.mapping)]
+    frames = (args.cloud_frame, args.odom_frame, args.odom_child_frame)
+    clouds = [pose.apply(points) for _, points, pose, _ in scans(args.mapping, *frames)]
     points = voxel_centroids(np.concatenate(clouds), 0.12)
     np.savez_compressed(args.out / 'map.npz', xyz=points)
     surface = SurfaceMap(points)
@@ -204,7 +234,7 @@ def main():
     filt = CorrectionFilter()
     odom_positions = []
     raw_positions = []
-    for t, cloud, initial, started in scans(args.inspection):
+    for t, cloud, initial, started in scans(args.inspection, *frames):
         if alignment is not None:
             initial = alignment.compose(initial)
         held_out = np.arange(len(cloud)) % 4 == 0

@@ -19,7 +19,8 @@ from std_msgs.msg import Header
 from tf2_ros import TransformBroadcaster
 
 from .localize3d import (CorrectionFilter, Motion, SurfaceMap, alignment_argument,
-                         alignment_pose, odometry_sample, scan_points)
+                         alignment_pose, check_frame_config, check_frames, frame_arguments,
+                         odometry_sample, scan_points)
 
 
 def stamp(message):
@@ -28,8 +29,14 @@ def stamp(message):
 
 
 class Localizer(Node):
-    def __init__(self, map_file, timings_file, map_from_odom=None, native_dll=None):
+    def __init__(self, map_file, timings_file, map_from_odom=None, native_dll=None,
+                 cloud_frame='base_link', odom_frame='odom', odom_child_frame='base_link'):
+        check_frame_config(cloud_frame, odom_child_frame)
         super().__init__('mgts_localize3d')
+        self.cloud_frame = cloud_frame
+        self.odom_frame = odom_frame
+        self.odom_child_frame = odom_child_frame
+        self.wrong_odom_frame = False
         self.alignment = alignment_pose(map_from_odom)
         with np.load(map_file) as data:
             xyz = data['xyz']
@@ -56,6 +63,17 @@ class Localizer(Node):
                                  qos_profile_sensor_data)
 
     def on_odom(self, message):
+        try:
+            check_frames(message, '/utlidar/robot_odom', self.odom_frame, self.odom_child_frame)
+        except ValueError as exc:
+            self.get_logger().warning(str(exc))
+            # Do not interpolate across a sample in an incompatible coordinate system.
+            self.odometry.clear()
+            self.wrong_odom_frame = True
+            while self.pending:
+                self.log_scan(self.pending.popleft(), 'wrong_frame')
+            return
+        self.wrong_odom_frame = False
         timestamp = stamp(message)
         if self.odometry and timestamp <= self.odometry[-1][0]:
             previous = self.odometry[-1][0]
@@ -71,6 +89,16 @@ class Localizer(Node):
 
     def on_cloud(self, cloud):
         started = perf_counter()
+        scan = (stamp(cloud), None, None, started, cloud.header.stamp)
+        try:
+            check_frames(cloud, '/utlidar/cloud_base', self.cloud_frame)
+        except ValueError as exc:
+            self.get_logger().warning(str(exc))
+            self.log_scan(scan, 'wrong_frame')
+            return
+        if self.wrong_odom_frame:
+            self.log_scan(scan, 'wrong_frame')
+            return
         values = read_points(cloud, field_names=['x', 'y', 'z', 'time'])
         xyz, offsets = scan_points(np.column_stack((values['x'], values['y'], values['z'])),
                                    values['time'])
@@ -114,7 +142,7 @@ class Localizer(Node):
         p.x, p.y, p.z = map(float, fit.xyz)
         q.x, q.y, q.z, q.w = map(float, fit.rotation.as_quat())
         self.pose.publish(message)
-        transform = TransformStamped(header=message.header, child_frame_id='base_link')
+        transform = TransformStamped(header=message.header, child_frame_id=self.odom_child_frame)
         transform.transform.translation.x = p.x
         transform.transform.translation.y = p.y
         transform.transform.translation.z = p.z
@@ -133,12 +161,14 @@ def main():
     parser.add_argument('map', type=Path)
     parser.add_argument('--timings', type=Path, required=True)
     alignment_argument(parser)
+    frame_arguments(parser)
     parser.add_argument('--native-dll', type=Path,
                         help='optional library built from tools/native_surface.cpp (same poses, faster)')
     args = parser.parse_args(remove_ros_args()[1:])
     rclpy.init()
     with args.timings.open('x', newline='', encoding='utf-8') as timings:
-        node = Localizer(args.map, timings, args.map_from_odom, args.native_dll)
+        node = Localizer(args.map, timings, args.map_from_odom, args.native_dll,
+                         args.cloud_frame, args.odom_frame, args.odom_child_frame)
         try:
             rclpy.spin(node)
         except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
