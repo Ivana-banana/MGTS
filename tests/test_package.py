@@ -140,7 +140,8 @@ def test_reproducible_committed_runtime(tmp_path):
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
             'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg',
             'configs/go2-current-scan.rviz', 'configs/go2-official.json', 'configs/go2-result-qos.yaml',
-            'configs/go2-result.rviz', 'configs/go2-video-third-person.rviz', 'configs/go2-video-top.rviz',
+            'configs/go2-result.rviz', 'configs/go2-surface-third-person.rviz', 'configs/go2-surface-top.rviz',
+            'configs/go2-video-third-person.rviz', 'configs/go2-video-top.rviz',
         }
         tracked = subprocess.check_output(
             ['git', 'ls-tree', '-r', '--name-only', commit, '--', 'mgts_nav', 'tests', 'tools'],
@@ -152,7 +153,7 @@ def test_reproducible_committed_runtime(tmp_path):
                     and path.stem.isidentifier() and filename != 'tests/test_package.py'
                     and (path.parent.name != 'tests' or path.stem.startswith('test_'))):
                 source_files.add(filename)
-        assert source_files | {'tools/native_grid.cpp'} == {
+        assert source_files | {'tools/capture_go2_rviz.sh', 'tools/native_grid.cpp'} == {
             name for name in names if name.startswith(('mgts_nav/', 'tests/', 'tools/'))
         }
         assert {'Dockerfile', '.dockerignore', 'pytest.ini', 'docs/package.md'} <= set(names)

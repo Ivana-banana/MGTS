@@ -29,3 +29,26 @@ rviz2 -d configs/go2-video-top.rviz
 rviz2 -d configs/go2-video-third-person.rviz
 ros2 bag play out/issue191/replay --qos-profile-overrides-path configs/go2-result-qos.yaml
 ~~~~
+
+## Объёмные ракурсы RViz
+
+[Вид сверху с поверхностями стен](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-rviz-surface-top-a5ad606.mp4) · [Камера за роботом](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-rviz-surface-third-person-a5ad606.mp4) · [Проверка и контрольные суммы](https://github.com/Ivana-banana/MGTS/issues/211).
+
+В обоих ракурсах корпус с четырьмя ногами движется по опубликованным позам. Модель использует фиксированную стойку. Поверхности построены из наблюдаемых ячеек карты обхода. Сетка сохраняет разрывы между ячейками, поэтому часть стен выглядит фрагментарно. В панели Displays пункт `Исходное облако карты` включает оригинальные точки.
+
+Для записи на Linux нужны собранный образ организаторов `hakatonius:latest` с ROS 2 Humble, Docker, Xvfb, xdotool, xwininfo, FFmpeg и ffprobe. Распакуйте `go2-live-full-a5ad606.zip` в `out/go2-release` и запустите запись из корня проекта.
+
+~~~bash
+bash tools/capture_go2_rviz.sh top out/go2-release out/go2-rviz-surface-top-a5ad606.mp4
+bash tools/capture_go2_rviz.sh third-person out/go2-release out/go2-rviz-surface-third-person-a5ad606.mp4
+~~~
+
+Для интерактивного просмотра в терминалах с ROS 2 Humble используйте один `ROS_DOMAIN_ID`. Запустите узел показа и выбранный профиль RViz, затем воспроизведите исходный bag.
+
+~~~bash
+python -m tools.rviz_go2 out/go2-release/map.npz --wall-alpha 0.68
+rviz2 -d configs/go2-surface-top.rviz
+ros2 bag play out/go2-release/bag --rate 1 --qos-profile-overrides-path configs/go2-result-qos.yaml
+~~~
+
+Для вида от третьего лица откройте профиль `configs/go2-surface-third-person.rviz` и запустите узел с параметрами `--wall-top 0.60 --wall-alpha 0.45`. Низкий полупрозрачный срез сохраняет видимость корпуса возле стен.
