@@ -66,13 +66,13 @@ class Capture(Node):
         self.poses += 1
 
 
-def run(inspect_bag, map_file, output, map_from_odom=None):
+def run(inspect_bag, map_file, output, map_from_odom=None, native_dll=None):
     output.mkdir(parents=True)
     rclpy.init()
     with (output / "timings.csv").open("x", newline="") as timings, (
             output / "arrivals.csv").open("x", newline="") as arrivals, (
             output / "player.log").open("x") as log:
-        node = Localizer(map_file, timings, map_from_odom)
+        node = Localizer(map_file, timings, map_from_odom, native_dll)
         capture = Capture(output / "result", arrivals)
         executor = SingleThreadedExecutor()
         executor.add_node(node)
@@ -108,4 +108,6 @@ if __name__ == "__main__":
     parser.add_argument("map_file", type=Path)
     parser.add_argument("output", type=Path)
     alignment_argument(parser)
+    parser.add_argument("--native-dll", type=Path,
+                        help="optional library built from tools/native_surface.cpp")
     run(**vars(parser.parse_args()))

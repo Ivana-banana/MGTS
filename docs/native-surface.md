@@ -37,7 +37,17 @@ g++ -O3 -std=c++17 -Wall -shared -fPIC -o native_surface.so tools/native_surface
 python3 -m mgts_nav.ros_localize3d out/issue185/3d/map.npz --timings times.csv --native-dll ./native_surface.so
 ```
 
-Проверено в контейнере ros:humble: узел запускается с флагом и публикует `/mgts/map3d` и `/mgts/pose3d`. Полный live replay с флагом не прогонялся. Равенство поз проверено офлайн, выше.
+`tools.go2_live_replay` принимает тот же флаг. Полный live replay инспекции на 1× в контейнере ros:humble (Docker Desktop, тот же ноутбук):
+
+```bash
+python3 -m tools.go2_live_replay data/official/inspection out/issue185/3d/map.npz /tmp/live-cpp --native-dll /tmp/native_surface.so
+```
+
+- статусы: 1524 `matched`, 1 `missing_odometry` (первый скан без одометрии, как в опубликованном прогоне);
+- опубликовано 1524 позы, все совпали с офлайн-прогоном Python до 1,8·10⁻¹⁵ м;
+- время обработчика p50 / p95 / p99: 2,79 / 5,95 / 8,27 мс.
+
+Опубликованные 12,03 / 25,25 / 31,77 мс (#197) сняты на другой машине и без DLL, поэтому их нельзя прямо сравнивать с этими.
 
 ## Чего нет
 
