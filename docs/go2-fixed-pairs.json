@@ -1,0 +1,1163 @@
+{
+ "description": "Fixed Go2 revisit control pairs for tools.evaluate_go2_localization --fixed-reference (#224). Pairs and registration seeds come from odometry only; compared trajectories do not affect them.",
+ "tool_commit": "e9c82922e7da70b303f857f3c5faf55e1d84c40d",
+ "inspection_sha256": {
+  "bag_for_localization_0.mcap": "08e70f5128c522402f02ed5d9e12a1effdfd7a3fc508256bbcc5c503e60e9784"
+ },
+ "criteria": {
+  "AGREE_DEG": 1.0,
+  "AGREE_M": 0.05,
+  "ANCHOR_STEP": 10,
+  "DISTINCT_GUESS_DEG": 5.0,
+  "DISTINCT_GUESS_M": 0.2,
+  "FALSE_ANCHOR_DEG": 5.0,
+  "FALSE_ANCHOR_M": 0.3,
+  "MIN_REVISIT_S": 15.0,
+  "PERTURBATIONS": [
+   [
+    0.3,
+    0.0,
+    0.0
+   ],
+   [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.3,
+    0.0
+   ],
+   [
+    0.0,
+    -0.3,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.17453292519943295
+   ],
+   [
+    0.0,
+    0.0,
+    -0.17453292519943295
+   ]
+  ],
+  "REFERENCE_INLIER_M": 0.1,
+  "REFERENCE_MIN_INLIERS": 0.5,
+  "REVISIT_RADIUS_M": 2.5,
+  "SUBMAP_HALF": 2,
+  "TURN_DEG_S": 20.0
+ },
+ "candidates": 97,
+ "with_reference": 22,
+ "rejected": 75,
+ "opposite_passes_with_reference": 10,
+ "pairs": [
+  {
+   "i": 0,
+   "j": 1449,
+   "ti_s": 0.0,
+   "tj_s": 104.484,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 10,
+   "j": 1449,
+   "ti_s": 0.7,
+   "tj_s": 104.484,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 20,
+   "j": 1449,
+   "ti_s": 1.428,
+   "tj_s": 104.484,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 30,
+   "j": 1449,
+   "ti_s": 2.139,
+   "tj_s": 104.484,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 40,
+   "j": 1449,
+   "ti_s": 2.884,
+   "tj_s": 104.484,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 50,
+   "j": 1449,
+   "ti_s": 3.606,
+   "tj_s": 104.484,
+   "reference": [
+    1.4342,
+    -0.1621,
+    -1.7078
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed5"
+   ],
+   "inliers": 0.596
+  },
+  {
+   "i": 60,
+   "j": 1449,
+   "ti_s": 4.328,
+   "tj_s": 104.484,
+   "reference": [
+    1.3949,
+    -0.1897,
+    -1.7079
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed1",
+    "perturbed5"
+   ],
+   "inliers": 0.618
+  },
+  {
+   "i": 70,
+   "j": 1449,
+   "ti_s": 5.034,
+   "tj_s": 104.484,
+   "reference": [
+    1.4029,
+    0.1298,
+    -1.4943
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed1",
+    "perturbed5"
+   ],
+   "inliers": 0.617
+  },
+  {
+   "i": 80,
+   "j": 1449,
+   "ti_s": 5.756,
+   "tj_s": 104.484,
+   "reference": [
+    1.0508,
+    -0.2076,
+    -1.8081
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed5"
+   ],
+   "inliers": 0.701
+  },
+  {
+   "i": 90,
+   "j": 1449,
+   "ti_s": 6.483,
+   "tj_s": 104.484,
+   "reference": [
+    0.8126,
+    -0.2443,
+    -1.8831
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed5"
+   ],
+   "inliers": 0.718
+  },
+  {
+   "i": 100,
+   "j": 1447,
+   "ti_s": 7.206,
+   "tj_s": 104.329,
+   "reference": [
+    0.4987,
+    -0.0635,
+    -1.849
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed5"
+   ],
+   "inliers": 0.701
+  },
+  {
+   "i": 110,
+   "j": 1447,
+   "ti_s": 7.934,
+   "tj_s": 104.329,
+   "reference": null,
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 120,
+   "j": 1445,
+   "ti_s": 8.64,
+   "tj_s": 104.19,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 130,
+   "j": 1442,
+   "ti_s": 9.366,
+   "tj_s": 103.979,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 140,
+   "j": 1438,
+   "ti_s": 10.068,
+   "tj_s": 103.684,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 150,
+   "j": 1430,
+   "ti_s": 10.797,
+   "tj_s": 103.091,
+   "reference": null,
+   "agreed": [
+    "perturbed0"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 160,
+   "j": 1427,
+   "ti_s": 11.529,
+   "tj_s": 102.862,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 170,
+   "j": 1421,
+   "ti_s": 12.256,
+   "tj_s": 102.412,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 180,
+   "j": 1415,
+   "ti_s": 12.974,
+   "tj_s": 101.973,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 190,
+   "j": 1413,
+   "ti_s": 13.707,
+   "tj_s": 101.823,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 200,
+   "j": 1411,
+   "ti_s": 14.401,
+   "tj_s": 101.679,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 210,
+   "j": 1405,
+   "ti_s": 15.113,
+   "tj_s": 101.237,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 220,
+   "j": 1402,
+   "ti_s": 15.802,
+   "tj_s": 101.006,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 230,
+   "j": 1401,
+   "ti_s": 16.523,
+   "tj_s": 100.94,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 240,
+   "j": 1394,
+   "ti_s": 17.268,
+   "tj_s": 100.456,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 250,
+   "j": 1391,
+   "ti_s": 17.975,
+   "tj_s": 100.25,
+   "reference": [
+    0.3221,
+    -0.3096,
+    -2.3153
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.513
+  },
+  {
+   "i": 260,
+   "j": 1391,
+   "ti_s": 18.688,
+   "tj_s": 100.25,
+   "reference": [
+    0.3347,
+    -0.344,
+    -2.3311
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.503
+  },
+  {
+   "i": 270,
+   "j": 1390,
+   "ti_s": 19.407,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 280,
+   "j": 1390,
+   "ti_s": 20.129,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 290,
+   "j": 1390,
+   "ti_s": 20.858,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 300,
+   "j": 1390,
+   "ti_s": 21.569,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 310,
+   "j": 1391,
+   "ti_s": 22.297,
+   "tj_s": 100.25,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 320,
+   "j": 1391,
+   "ti_s": 22.996,
+   "tj_s": 100.25,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 330,
+   "j": 1391,
+   "ti_s": 23.719,
+   "tj_s": 100.25,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 340,
+   "j": 1390,
+   "ti_s": 24.419,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 350,
+   "j": 1390,
+   "ti_s": 25.147,
+   "tj_s": 100.184,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 360,
+   "j": 1388,
+   "ti_s": 25.891,
+   "tj_s": 100.04,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 370,
+   "j": 1386,
+   "ti_s": 26.575,
+   "tj_s": 99.895,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 380,
+   "j": 1385,
+   "ti_s": 27.33,
+   "tj_s": 99.823,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 390,
+   "j": 1381,
+   "ti_s": 28.031,
+   "tj_s": 99.529,
+   "reference": null,
+   "agreed": [
+    "perturbed0"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 400,
+   "j": 1379,
+   "ti_s": 28.737,
+   "tj_s": 99.378,
+   "reference": [
+    0.1882,
+    -0.4405,
+    -2.694
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.533
+  },
+  {
+   "i": 410,
+   "j": 1376,
+   "ti_s": 29.464,
+   "tj_s": 99.145,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 420,
+   "j": 1373,
+   "ti_s": 30.164,
+   "tj_s": 98.923,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 430,
+   "j": 1369,
+   "ti_s": 30.903,
+   "tj_s": 98.617,
+   "reference": null,
+   "agreed": [
+    "perturbed0"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 440,
+   "j": 1364,
+   "ti_s": 31.648,
+   "tj_s": 98.255,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 450,
+   "j": 1362,
+   "ti_s": 32.337,
+   "tj_s": 98.112,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 460,
+   "j": 1357,
+   "ti_s": 33.02,
+   "tj_s": 97.769,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 470,
+   "j": 1355,
+   "ti_s": 33.705,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 480,
+   "j": 1355,
+   "ti_s": 34.449,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 490,
+   "j": 1355,
+   "ti_s": 35.198,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 500,
+   "j": 1355,
+   "ti_s": 35.921,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 510,
+   "j": 1355,
+   "ti_s": 36.671,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 520,
+   "j": 1355,
+   "ti_s": 37.365,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [
+    "perturbed0"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 530,
+   "j": 1355,
+   "ti_s": 38.098,
+   "tj_s": 97.624,
+   "reference": null,
+   "agreed": [
+    "perturbed0",
+    "perturbed2"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 540,
+   "j": 1354,
+   "ti_s": 38.798,
+   "tj_s": 97.556,
+   "reference": null,
+   "agreed": [
+    "perturbed0",
+    "perturbed2"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 550,
+   "j": 1345,
+   "ti_s": 39.527,
+   "tj_s": 96.939,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 560,
+   "j": 1337,
+   "ti_s": 40.277,
+   "tj_s": 96.339,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 570,
+   "j": 1332,
+   "ti_s": 41.032,
+   "tj_s": 95.967,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 580,
+   "j": 1326,
+   "ti_s": 41.749,
+   "tj_s": 95.517,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 590,
+   "j": 1314,
+   "ti_s": 42.466,
+   "tj_s": 94.646,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 600,
+   "j": 1302,
+   "ti_s": 43.196,
+   "tj_s": 93.789,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 610,
+   "j": 1294,
+   "ti_s": 43.933,
+   "tj_s": 93.21,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 620,
+   "j": 1288,
+   "ti_s": 44.628,
+   "tj_s": 92.766,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 630,
+   "j": 1279,
+   "ti_s": 45.322,
+   "tj_s": 92.128,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 640,
+   "j": 1269,
+   "ti_s": 46.049,
+   "tj_s": 91.401,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 650,
+   "j": 1261,
+   "ti_s": 46.734,
+   "tj_s": 90.788,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 660,
+   "j": 1258,
+   "ti_s": 47.45,
+   "tj_s": 90.561,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 670,
+   "j": 1245,
+   "ti_s": 48.144,
+   "tj_s": 89.632,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 680,
+   "j": 1245,
+   "ti_s": 48.883,
+   "tj_s": 89.632,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 690,
+   "j": 1241,
+   "ti_s": 49.589,
+   "tj_s": 89.332,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 700,
+   "j": 1241,
+   "ti_s": 50.306,
+   "tj_s": 89.332,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 710,
+   "j": 1233,
+   "ti_s": 51.046,
+   "tj_s": 88.749,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 720,
+   "j": 1229,
+   "ti_s": 51.755,
+   "tj_s": 88.466,
+   "reference": null,
+   "agreed": [
+    "perturbed3",
+    "perturbed4"
+   ],
+   "inliers": null
+  },
+  {
+   "i": 730,
+   "j": 1229,
+   "ti_s": 52.473,
+   "tj_s": 88.466,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 740,
+   "j": 1229,
+   "ti_s": 53.213,
+   "tj_s": 88.466,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 750,
+   "j": 1229,
+   "ti_s": 53.952,
+   "tj_s": 88.466,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 760,
+   "j": 1109,
+   "ti_s": 54.689,
+   "tj_s": 79.864,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 770,
+   "j": 1073,
+   "ti_s": 55.444,
+   "tj_s": 77.297,
+   "reference": [
+    1.5389,
+    0.5943,
+    1.7741
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed5"
+   ],
+   "inliers": 0.561
+  },
+  {
+   "i": 780,
+   "j": 1073,
+   "ti_s": 56.19,
+   "tj_s": 77.297,
+   "reference": [
+    1.2279,
+    -0.3604,
+    1.0708
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.695
+  },
+  {
+   "i": 790,
+   "j": 1073,
+   "ti_s": 56.935,
+   "tj_s": 77.297,
+   "reference": [
+    0.8427,
+    -0.3089,
+    1.1046
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.788
+  },
+  {
+   "i": 800,
+   "j": 1109,
+   "ti_s": 57.623,
+   "tj_s": 79.864,
+   "reference": [
+    0.6312,
+    0.0621,
+    1.2956
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.806
+  },
+  {
+   "i": 810,
+   "j": 1109,
+   "ti_s": 58.351,
+   "tj_s": 79.864,
+   "reference": [
+    0.5623,
+    0.0478,
+    1.3186
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.799
+  },
+  {
+   "i": 820,
+   "j": 1109,
+   "ti_s": 59.063,
+   "tj_s": 79.864,
+   "reference": [
+    0.5135,
+    0.1537,
+    1.5437
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.775
+  },
+  {
+   "i": 830,
+   "j": 1109,
+   "ti_s": 59.759,
+   "tj_s": 79.864,
+   "reference": [
+    0.5085,
+    -0.148,
+    0.9634
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed4"
+   ],
+   "inliers": 0.8
+  },
+  {
+   "i": 840,
+   "j": 1109,
+   "ti_s": 60.501,
+   "tj_s": 79.864,
+   "reference": [
+    0.52,
+    -0.1485,
+    0.9718
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed5"
+   ],
+   "inliers": 0.787
+  },
+  {
+   "i": 850,
+   "j": 1109,
+   "ti_s": 61.235,
+   "tj_s": 79.864,
+   "reference": [
+    0.4003,
+    -0.1659,
+    0.9552
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed1",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4"
+   ],
+   "inliers": 0.797
+  },
+  {
+   "i": 860,
+   "j": 1109,
+   "ti_s": 61.968,
+   "tj_s": 79.864,
+   "reference": [
+    0.2829,
+    -0.3196,
+    0.4658
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.828
+  },
+  {
+   "i": 870,
+   "j": 1118,
+   "ti_s": 62.669,
+   "tj_s": 80.52,
+   "reference": [
+    0.062,
+    -0.2149,
+    0.2209
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed3",
+    "perturbed5"
+   ],
+   "inliers": 0.813
+  },
+  {
+   "i": 880,
+   "j": 1120,
+   "ti_s": 63.413,
+   "tj_s": 80.67,
+   "reference": [
+    0.1018,
+    -0.0333,
+    1.1517
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed0",
+    "perturbed2",
+    "perturbed3",
+    "perturbed4",
+    "perturbed5"
+   ],
+   "inliers": 0.702
+  },
+  {
+   "i": 890,
+   "j": 1120,
+   "ti_s": 64.146,
+   "tj_s": 80.67,
+   "reference": [
+    -0.0251,
+    0.0314,
+    1.7961
+   ],
+   "agreed": [
+    "odometry",
+    "perturbed5"
+   ],
+   "inliers": 0.514
+  },
+  {
+   "i": 900,
+   "j": 1120,
+   "ti_s": 64.869,
+   "tj_s": 80.67,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 910,
+   "j": 1119,
+   "ti_s": 65.591,
+   "tj_s": 80.598,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 920,
+   "j": 1129,
+   "ti_s": 66.296,
+   "tj_s": 81.321,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 930,
+   "j": 1139,
+   "ti_s": 67.018,
+   "tj_s": 82.043,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 940,
+   "j": 1149,
+   "ti_s": 67.735,
+   "tj_s": 82.737,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 950,
+   "j": 1159,
+   "ti_s": 68.458,
+   "tj_s": 83.47,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  },
+  {
+   "i": 960,
+   "j": 1169,
+   "ti_s": 69.175,
+   "tj_s": 84.199,
+   "reference": null,
+   "agreed": [],
+   "inliers": null
+  }
+ ]
+}
