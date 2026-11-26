@@ -1,0 +1,13 @@
+{
+  "lidar": "/utlidar/cloud_base",
+  "lidar_frame": "base_link",
+  "base_frame": "base_link",
+  "base_from_lidar_xyz_m": [0, 0, 0],
+  "base_from_lidar_xyzw": [0, 0, 0, 1],
+  "odom": "/utlidar/robot_odom",
+  "odom_frame": "odom",
+  "imu": null,
+  "stationary_s": 0,
+  "height_band_m": [-0.15, 1.5],
+  "max_sync_gap_s": 0.1
+}
