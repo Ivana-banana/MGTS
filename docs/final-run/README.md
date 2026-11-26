@@ -1,8 +1,8 @@
 # Комплект официального прогона Go2 на 1×
 
-[Скачать результат для команды, ZIP 1,86 МБ](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-live-full-a5ad606.zip). Архив доступен участникам приватного репозитория. Доступ экспертов согласуется в #186. Для полной сдачи ожидаются два видео RViz из #191.
+[Скачать результат для команды, ZIP 1,86 МБ](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-live-full-a5ad606.zip). Архив доступен участникам приватного репозитория. Доступ экспертов согласуется в #186. Оба ракурса из #191 доступны в том же релизе: [вид сверху](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-rviz-top-a5ad606.mp4) и [вид от третьего лица](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-rviz-third-person-a5ad606.mp4).
 
-В архиве лежат выходной rosbag2 (metadata.yaml и result_0.mcap), карта map.npz, замеры latency.csv, конфигурация profile.json, команды run.json и индекс index.json. Входные архивы перечислены с хешами в индексе и доступны отдельно из ранее опубликованного релиза. Размер ZIP с результатами 1 859 258 байт, SHA-256 `1b107f8ca9026ceb8c060e61452c85c2c87706493019a20f05ccd3c20303af89`.
+В архиве лежат выходной rosbag2 (metadata.yaml и result_0.mcap), карта map.npz, замеры latency.csv, конфигурация profile.json, команды run.json и промежуточный индекс. Полный [индекс с обоими видео](index.json) хранится в репозитории. Входные архивы перечислены с хешами в индексе и доступны отдельно из ранее опубликованного релиза. Размер ZIP с результатами 1 859 258 байт, SHA-256 `1b107f8ca9026ceb8c060e61452c85c2c87706493019a20f05ccd3c20303af89`.
 
 ## Что проверено
 
@@ -28,8 +28,14 @@ gh release download mgts-data-2026-11-26 -D $dest -p go2-live-full-a5ad606.zip
 Get-FileHash "$dest/go2-live-full-a5ad606.zip"
 Expand-Archive "$dest/go2-live-full-a5ad606.zip" -DestinationPath "$dest/bundle"
 gh release download mgts-data-2026-11-26 -D "$dest/bundle/inputs" -p 'bag_for_*.zip'
-python -m tools.final_run_index verify "$dest/bundle" --allow-partial
+gh release download mgts-data-2026-11-26 -D "$dest/downloads" -p 'go2-rviz-*-a5ad606.mp4'
+New-Item -ItemType Directory -Force "$dest/bundle/video" | Out-Null
+foreach ($view in 'top','third-person') {
+    Copy-Item "$dest/downloads/go2-rviz-$view-a5ad606.mp4" "$dest/bundle/video/$view.mp4"
+}
+Copy-Item docs/final-run/index.json "$dest/bundle/index.json"
+python -m tools.final_run_index verify "$dest/bundle"
 python -m mgts_nav.result_bag_audit data/official/inspection "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d
 ```
 
-Проверка восьми файлов прошла на повторно скачанном результате с ранее проверенными входными ZIP. В [индексе](index.json) статус complete равен false. После получения обоих видео запишите их как video/top.mp4 и video/third-person.mp4 и выполните build и verify инструмента tools.final_run_index без --allow-partial.
+Проверка всех десяти файлов скачанного комплекта прошла со статусом complete=True. Оба MP4 полностью декодированы FFmpeg. Размеры и SHA-256 совпали с файлами исполнителя #191 и данными релиза. [Описание записи и контрольные суммы видео](../go2-video.md).

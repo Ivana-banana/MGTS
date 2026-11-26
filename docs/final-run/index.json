@@ -6,11 +6,8 @@
     "localization": "python -m tools.go2_live_replay data/official/inspection out/issue197/full3d/map.npz out/issue197/live-full",
     "playback": "ros2 bag play out/issue197/live-full/result --qos-profile-overrides-path configs/go2-result-qos.yaml"
   },
-  "complete": false,
-  "missing": [
-    "rviz_top",
-    "rviz_third_person"
-  ],
+  "complete": true,
+  "missing": [],
   "files": [
     {
       "role": "provenance",
@@ -47,6 +44,18 @@
       "path": "latency.csv",
       "bytes": 73760,
       "sha256": "783c6f10b4a72ac2c820854f5b5cc61c93166d71708f72e114785de0fb154543"
+    },
+    {
+      "role": "rviz_top",
+      "path": "video/top.mp4",
+      "bytes": 803518,
+      "sha256": "d61b823b72edd3373b621ad5bf2c9497523dfe664cdb1ee180b5796ed7119c7a"
+    },
+    {
+      "role": "rviz_third_person",
+      "path": "video/third-person.mp4",
+      "bytes": 24113590,
+      "sha256": "4fef41d3ef5537425d6a2ae5377ddcb3438bc9c6f5f9af16f6f10138736186d0"
     },
     {
       "role": "bag_metadata",
