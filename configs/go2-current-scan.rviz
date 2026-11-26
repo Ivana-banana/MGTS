@@ -1,0 +1,32 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Fixed map
+      Enabled: true
+      Topic:
+        Value: /map_points
+        Reliability Policy: Reliable
+      Color Transformer: FlatColor
+      Color: 156; 170; 183
+      Size (m): 0.045
+      Decay Time: 0
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Current scan
+      Enabled: true
+      Topic:
+        Value: /current_scan
+        Reliability Policy: Reliable
+      Color Transformer: FlatColor
+      Color: 255; 125; 45
+      Size (m): 0.06
+      Decay Time: 0.07
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 18
