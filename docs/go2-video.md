@@ -46,7 +46,7 @@ bash tools/capture_go2_rviz.sh third-person out/go2-release out/go2-rviz-surface
 Для интерактивного просмотра в терминалах с ROS 2 Humble используйте один `ROS_DOMAIN_ID`. Запустите узел показа и выбранный профиль RViz, затем воспроизведите исходный bag.
 
 ~~~bash
-python -m tools.rviz_go2 out/go2-release/map.npz
+python -m tools.rviz_go2 out/go2-release/map.npz --wall-alpha 0.68
 rviz2 -d configs/go2-surface-top.rviz
 ros2 bag play out/go2-release/bag --rate 1 --qos-profile-overrides-path configs/go2-result-qos.yaml
 ~~~

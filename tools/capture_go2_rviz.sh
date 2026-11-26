@@ -13,7 +13,7 @@ preview_offset=${4:-}
 project=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
 image=${MGTS_ROS_IMAGE:-hakatonius:latest}
 wall_top=1.35
-wall_alpha=1.0
+wall_alpha=0.68
 if [[ "$view" = third-person ]]; then
     wall_top=0.60
     wall_alpha=0.45
@@ -61,16 +61,29 @@ docker run --pull never --rm --cidfile "$scratch/container" --user "$(id -u):$(i
         visual_pid=$!
         rviz2 -d "/mgts/configs/go2-surface-$1.rviz" &
         rviz_pid=$!
-        while [[ ! -f /capture/start ]]; do
-            kill -0 "$visual_pid" "$rviz_pid"
-            sleep 0.1
-        done
         player_options=()
         if [[ -n "$2" ]]; then
             player_options+=(--start-offset "$2")
+        else
+            python3 -c "
+import yaml
+with open(\"/input/bag/metadata.yaml\", encoding=\"utf-8-sig\") as stream:
+    topics = yaml.safe_load(stream)[\"rosbag2_bagfile_information\"][\"topics_with_message_count\"]
+print(next(topic[\"message_count\"] for topic in topics if topic[\"topic_metadata\"][\"name\"] == \"/mgts/pose3d\"))
+" > /capture/expected-poses
         fi
-        ros2 bag play /input/bag --rate 1 --disable-keyboard-controls \
-            --qos-profile-overrides-path /mgts/configs/go2-result-qos.yaml "${player_options[@]}"
+        ros2 bag play /input/bag --rate 1 --disable-keyboard-controls --start-paused \
+            --wait-for-all-acked 2000 \
+            --qos-profile-overrides-path /mgts/configs/go2-result-qos.yaml "${player_options[@]}" &
+        player_pid=$!
+        timeout 20 ros2 service call /rosbag2_player/is_paused rosbag2_interfaces/srv/IsPaused
+        touch /capture/player-ready
+        while [[ ! -f /capture/start ]]; do
+            kill -0 "$visual_pid" "$rviz_pid" "$player_pid"
+            sleep 0.1
+        done
+        timeout 15 ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume
+        wait "$player_pid"
         kill -0 "$visual_pid" "$rviz_pid"
         sleep 1
         kill -TERM "$visual_pid"
@@ -127,6 +140,13 @@ if [[ -n "$preview_offset" ]]; then
     capture_options+=(-t 7)
 fi
 
+for ((attempt = 0; attempt < 250; attempt++)); do
+    [[ -f "$scratch/player-ready" ]] && break
+    kill -0 "$container_pid" || { tail -30 "${output%.mp4}.ros.log" >&2; exit 1; }
+    sleep 0.1
+done
+[[ -f "$scratch/player-ready" ]] || { echo "Проигрыватель ROS 2 не вышел из инициализации." >&2; exit 1; }
+
 ffmpeg -n -nostdin -loglevel warning -f x11grab -framerate 24 -draw_mouse 0 \
     -video_size "${width}x${height}" -i "$DISPLAY.0+$left,$top" \
     -an -c:v libx264 -threads 2 -preset veryfast -crf 19 -pix_fmt yuv420p \
@@ -150,6 +170,14 @@ fi
 wait "$recorder_pid" || recorder_status=$?
 recorder_pid=
 [[ $recorder_status -eq 0 || $recorder_status -eq 255 ]]
+if [[ -z "$preview_offset" ]]; then
+    expected=$(cat "$scratch/expected-poses")
+    actual=$(awk '/^Поз на последнем повторе: / { print $NF }' "${output%.mp4}.ros.log")
+    if [[ "$actual" != "$expected" ]]; then
+        echo "Узел показа получил ${actual:-0} из $expected поз. Запись не сохранена." >&2
+        exit 1
+    fi
+fi
 test -s "$scratch/scene.mp4"
 ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,duration,nb_frames "$scratch/scene.mp4"
 ln -T -- "$scratch/scene.mp4" "$output"

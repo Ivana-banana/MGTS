@@ -53,12 +53,12 @@ Visualization Manager:
       Class: rviz_default_plugins/ThirdPersonFollower
       Target Frame: rviz_go2
       Focal Point:
-        X: 0.22
-        Y: 0.02
+        X: -0.45
+        Y: -0.16
         Z: 0.03
-      Distance: 2.2
-      Pitch: 1.10
-      Yaw: 3.48
+      Distance: 2.60
+      Pitch: 0.75
+      Yaw: 3.88
 Window Geometry:
   X: 0
   Y: 0
