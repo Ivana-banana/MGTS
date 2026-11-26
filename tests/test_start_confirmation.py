@@ -46,9 +46,10 @@ def test_full_views_and_reproduced_false_accept(tmp_path, seed, monkeypatch, cap
         # Exercise the same limited observations through the localization entry point.
         output = tmp_path / "limited-result"
         monkeypatch.setattr(cli, "scans", lambda bag, config: iter(limited))
+        # Default localize confirms automatic starts; no explicit flag required.
         monkeypatch.setattr(sys, "argv", ["mgts_nav", "localize", str(root / "inspection"),
                             "--map", str(tmp_path / "map.yaml"), "--config", str(PROFILE),
-                            "--out", str(output), "--confirm-start"])
+                            "--out", str(output)])
         with pytest.raises(SystemExit) as failure:
             cli.main()
         assert failure.value.code == 2

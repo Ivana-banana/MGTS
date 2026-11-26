@@ -41,17 +41,22 @@ def test_two_bags_without_any_ground_truth_files_or_start(tmp_path, confirm):
         (data / name).unlink()
     result = tmp_path / 'solution'
     if confirm:
+        # Default path: automatic start is confirmed, recovery stays on.
         subprocess.run([sys.executable, '-m', 'mgts_nav.solve', str(data / 'mapping'),
                         str(data / 'inspection'), '--config', str(PROFILE), '--out', str(result),
-                        '--confirm-start', '--mapping-velocity-prior'], check=True)
+                        '--mapping-velocity-prior'], check=True)
     else:
-        solve(data / 'mapping', data / 'inspection', PROFILE, result)
+        solve(data / 'mapping', data / 'inspection', PROFILE, result, confirm_start=False)
     summary = json.loads((result / 'inspection' / 'summary.json').read_text())
     map_summary = json.loads((result / 'map' / 'summary.json').read_text())
+    options = json.loads((result / 'solve-options.json').read_text())
     if confirm:
         assert map_summary['mapping_velocity_prior_steps'] == 0
+        assert options['confirm_start'] is True
+        assert options['recover'] is True
     else:
         assert 'mapping_velocity_prior_steps' not in map_summary
+        assert options['confirm_start'] is False
     assert 'mapping_velocity_prior_steps' not in summary
     assert summary['initialization'] == ('confirmed_scan_to_map' if confirm else 'scan_to_map')
     inspection = read_csv(result / 'inspection' / 'trajectory.csv')

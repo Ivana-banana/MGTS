@@ -51,15 +51,21 @@ def run(args, output):
     drift_recovery = None
     recovery = None
     if args.command == 'localize':
+        from .safe_defaults import resolve_confirm_start, resolve_recover
         map_path = args.map
         pixels, meta, points = read_map(map_path)
         if getattr(args, 'recover_drift', False):
             from .recovery import DriftRecovery
             drift_recovery = DriftRecovery(pixels, meta)
-        if args.recover:
+        if resolve_recover(getattr(args, 'recover', None)):
             from .recovery import Recovery
             recovery = Recovery(pixels, meta)
         search = getattr(args, 'start_search', None)
+        want_confirm = resolve_confirm_start(
+            getattr(args, 'confirm_start', None),
+            initial=None if automatic else start,
+            start_search=search,
+        )
         if search:
             from .delayed_start import search_prefix
             try:
@@ -88,7 +94,7 @@ def run(args, output):
                 start_method = 'multiple_scans_to_map'
             else:
                 start_method = 'scan_to_map'
-                if args.confirm_start:
+                if want_confirm:
                     from .start_confirmation import confirm_start
                     following, stream = tee(stream)
                     try:
@@ -242,11 +248,23 @@ def main():
         if name == 'localize':
             from .delayed_start import START_SEARCHES
             group.add_argument('--start-search', choices=START_SEARCHES, help='Choose a global pose search')
-            group.add_argument('--confirm-start', action='store_true',
-                               help='Verify an accepted single-scan start using later scans and odometry')
             p.add_argument('--map', type=Path, required=True, help='map.yaml from mapping')
             p.add_argument('--recover-drift', action='store_true', help='Experimentally recheck a matched pose after a drift warning')
-            p.add_argument('--recover', action='store_true', help='Try confirmed global recovery after loss')
+            confirm = p.add_mutually_exclusive_group()
+            confirm.add_argument(
+                '--confirm-start', action='store_true', dest='confirm_start',
+                help='Verify an accepted single-scan start using later scans (default for automatic start)')
+            confirm.add_argument(
+                '--no-confirm-start', action='store_false', dest='confirm_start',
+                help='Accept a single-scan start without later confirmation')
+            recover = p.add_mutually_exclusive_group()
+            recover.add_argument(
+                '--recover', action='store_true', dest='recover',
+                help='Try confirmed global recovery after loss (default)')
+            recover.add_argument(
+                '--no-recover', action='store_false', dest='recover',
+                help='Disable global recovery after localization loss')
+            p.set_defaults(confirm_start=None, recover=None)
     args = parser.parse_args()
     try:
         if args.command == 'inspect':
