@@ -153,7 +153,7 @@ def test_reproducible_committed_runtime(tmp_path):
                     and path.stem.isidentifier() and filename != 'tests/test_package.py'
                     and (path.parent.name != 'tests' or path.stem.startswith('test_'))):
                 source_files.add(filename)
-        assert source_files | {'tools/capture_go2_rviz.sh', 'tools/native_grid.cpp'} == {
+        assert source_files | {'tools/capture_go2_rviz.sh', 'tools/native_grid.cpp', 'tools/native_surface.cpp'} == {
             name for name in names if name.startswith(('mgts_nav/', 'tests/', 'tools/'))
         }
         assert {'Dockerfile', '.dockerignore', 'pytest.ini', 'docs/package.md'} <= set(names)
