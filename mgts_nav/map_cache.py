@@ -1,4 +1,5 @@
 """Publish a complete mapping stage atomically and verify it before inspection retries."""
+import errno
 import hashlib
 from importlib.metadata import version
 from importlib.resources import files
@@ -45,7 +46,9 @@ def use_or_build(cache, target, key, build):
             (stage / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
             try:
                 stage.rename(cache)
-            except FileExistsError:
+            except OSError as exc:
+                if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                    raise
                 pass  # Another complete writer won publication. Verify its copy below.
     manifest = json.loads((cache / 'manifest.json').read_bytes())
     if manifest.get('inputs') != key:
