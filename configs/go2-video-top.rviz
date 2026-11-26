@@ -1,0 +1,75 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Fixed 3D map
+      Enabled: true
+      Topic:
+        Value: /mgts/map3d
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+      Color Transformer: FlatColor
+      Color: 115; 128; 145
+      Style: Points
+      Size (Pixels): 2
+      Decay Time: 0
+    - Class: rviz_default_plugins/Pose
+      Name: Robot pose
+      Enabled: true
+      Topic:
+        Value: /mgts/pose3d
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 10
+      Shape: Arrow
+      Color: 255; 55; 95
+      Shaft Length: 1.0
+      Shaft Radius: 0.15
+      Head Length: 0.4
+      Head Radius: 0.29
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Current scan
+      Enabled: true
+      Topic:
+        Value: /current_scan
+        Reliability Policy: Reliable
+      Style: Points
+      Size (Pixels): 4
+      Color Transformer: FlatColor
+      Color: 255; 130; 48
+      Decay Time: 0.08
+    - Class: rviz_default_plugins/Path
+      Name: Tracked path
+      Enabled: true
+      Topic:
+        Value: /mgts/display_path
+      Color: 0; 225; 230
+      Line Style: Billboards
+      Line Width: 0.09
+      Buffer Length: 1
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Focal Point:
+        X: 0
+        Y: 7
+        Z: 0
+      Distance: 31
+      Pitch: 1.565
+      Yaw: 1.57
+Window Geometry:
+  Width: 1200
+  Height: 760
+  Hide Left Dock: true
+  Hide Right Dock: true
+
+
+

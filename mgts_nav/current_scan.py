@@ -55,7 +55,7 @@ def export(inspection, result, output, pose_topic):
         stage = Path(tmp) / 'bag'
         with Writer(stage, version=8) as writer:
             copies = {c.id: writer.add_connection(
-                c.topic, c.msgtype, msgdef=c.msgdef.data, rihs01=c.digest,
+                c.topic, c.msgtype, typestore=bag.typestore, msgdef=c.msgdef.data or None, rihs01=c.digest or None,
                 serialization_format=c.ext.serialization_format, offered_qos_profiles=c.ext.offered_qos_profiles)
                 for c in bag.connections}
             layer = writer.add_connection('/current_scan', 'sensor_msgs/msg/PointCloud2', typestore=store)
