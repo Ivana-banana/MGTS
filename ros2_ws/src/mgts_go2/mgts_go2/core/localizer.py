@@ -59,8 +59,11 @@ class LocalizerParams:
     local_yaw_deg: float = 20.0
     local_yaw_step_deg: float = 10.0
     local_min_structure: float = 0.6
-    local_min_margin: float = 0.05
+    local_min_margin: float = 0.1     # over the best distinct candidate
+    local_min_gain: float = 0.15      # over the score at the prediction, for jumps beyond local_free_jump_m
+    local_free_jump_m: float = 0.3
     global_after: int = 10            # failed local searches before a global search
+    global_interval: int = 20         # sweeps between global search attempts while lost (it takes seconds)
     probation: int = 10               # sweeps after a global relocalization that must all confirm it
     # global search over the places of the mapping run
     search_step_m: float = 0.75
@@ -101,6 +104,7 @@ class Localizer:
         self.unverified = False       # pose set from outside (odom/pose init) not yet confirmed by a sweep
         self.probation_left = 0       # sweeps left to confirm a global relocalization
         self.previous_good = None     # T_map_odom before a global jump, restored if probation fails
+        self.since_global = 10 ** 9   # sweeps since the last global search attempt
         self.status = INITIALIZING
         self._prior = prior_information(self.p.prior_sigma_rot, self.p.prior_sigma_trans)
         if self.p.planar:
@@ -178,7 +182,10 @@ class Localizer:
                     inits.append(move @ pred)
         scored = self._score_candidates(src, struct, inits, 6, (0.6, 0.3))
         best, best_t, second = self._best_and_second(scored, 0.4, np.radians(8))
-        if best >= self.p.local_min_structure and best - second >= self.p.local_min_margin:
+        at_pred = self._score_candidates(src, struct, [pred], 6, (0.6, 0.3))[0][0]
+        jump, _ = se3.delta_norm(se3.inv(pred) @ best_t)
+        clear = best - second >= self.p.local_min_margin and best - at_pred >= self.p.local_min_gain
+        if best >= self.p.local_min_structure and (jump <= self.p.local_free_jump_m or clear):
             return best_t @ se3.inv(t_odom_base), best, second
         return None, best, second
 
@@ -224,7 +231,12 @@ class Localizer:
                 kind = 'local'
                 if corr is None:
                     self.local_failures += 1
-            if corr is None and (not self.initialized or self.local_failures >= self.p.global_after):
+            self.since_global += 1
+            # an unconfirmed start goes global after one failed local search, a tracked pose waits longer
+            wait = 1 if self.unverified else self.p.global_after
+            if corr is None and (not self.initialized or (self.local_failures >= wait
+                                                          and self.since_global >= self.p.global_interval)):
+                self.since_global = 0
                 corr, search_score, _ = self.search(src, t_odom_base)
                 kind = 'global'
                 if corr is not None and self.initialized:

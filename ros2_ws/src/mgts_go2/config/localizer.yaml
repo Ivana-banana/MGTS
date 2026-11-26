@@ -26,4 +26,5 @@ mgts_localizer:
     max_correction_m: 0.5
     max_iterations: 15
     lost_after: 15
+    path_every: 7                        # publish /mgts/path every N sweeps (~2 Hz); /mgts/pose has every sweep
     timing_csv: ''

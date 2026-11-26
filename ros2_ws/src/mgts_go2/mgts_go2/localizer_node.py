@@ -120,7 +120,7 @@ class LocalizerNode(Node):
         self.max_pending = P('max_pending', 2).value
         self.odom_wait = P('odom_wait', 0.15).value
         self.timing_csv = P('timing_csv', '').value
-        self.path_every = P('path_every', 1).value
+        self.path_every = P('path_every', 7).value               # sweeps between Path messages (~2 Hz)
         lp = LocalizerParams(
             reg_voxel=P('reg_voxel', dp.reg_voxel).value,
             min_range=P('min_range', dp.min_range).value,
@@ -186,27 +186,37 @@ class LocalizerNode(Node):
         return header_stamp + (self.offset or 0.0)
 
     def _init_offset(self, header_stamp):
+        """Fix the output time base on the first odometry message. Returns False while undecided."""
         if self.offset is not None:
-            return
+            return True
         now = self.get_clock().now().nanoseconds * 1e-9
         use_sim = self.get_parameter('use_sim_time').value
-        if self.stamp_mode == 'clock' or (self.stamp_mode == 'auto' and use_sim and now > 0
-                                          and abs(now - header_stamp) > 1.0):
-            self.offset = now - header_stamp
+        if self.stamp_mode == 'header':
+            self.offset = 0.0
+        elif self.stamp_mode == 'clock' or (self.stamp_mode == 'auto' and use_sim):
+            if now <= 0.0:
+                # /clock has not arrived yet: decide on a later message, never on time zero
+                self.get_logger().info('waiting for /clock to fix the output time base',
+                                       throttle_duration_sec=2.0)
+                return False
+            self.offset = (now - header_stamp) if abs(now - header_stamp) > 1.0 else 0.0
         else:
             self.offset = 0.0
         self.get_logger().info('output stamps = header + %.3f s (stamp_mode=%s, use_sim_time=%s)'
                                % (self.offset, self.stamp_mode, use_sim))
+        return True
 
     # ------------------------------------------------------------ callbacks
     def on_odom(self, msg):
         st = stamp_of(msg.header)
-        self._init_offset(st)
+        ready = self._init_offset(st)
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         t = se3.from_pose((p.x, p.y, p.z), (q.x, q.y, q.z, q.w))
         if not self.odom.add(st, t):
             return
         self.last_odom_msg = msg
+        if not ready:
+            return
         if self.publish_odom_tf:
             self.tf.sendTransform(make_tf(self.odom_frame, self.base_frame, t, self.out_stamp(st)))
         if self.loc.initialized:
@@ -237,7 +247,7 @@ class LocalizerNode(Node):
             self.pub_map.publish(self.map_msg)
             self.static_lidar()
             self.map_published = True
-        while self.pending:
+        while self.pending and self.offset is not None:
             arrived, msg = self.pending[0]
             st = stamp_of(msg.header)
             f = cloud.decode(msg)
@@ -247,14 +257,14 @@ class LocalizerNode(Node):
             if newest < end and time.perf_counter() - arrived < self.odom_wait:
                 return  # wait for odometry covering the whole sweep
             self.pending.popleft()
-            self.handle(msg, f, times, st, arrived)
+            self.process_sweep(msg, f, times, st, arrived)
 
     def static_lidar(self):
         if self.publish_lidar_tf:
             self.static_tf.sendTransform(make_tf(self.base_frame, 'utlidar_lidar', LIDAR_IN_BASE,
                                                  self.out_stamp(self.odom.times[-1]) if len(self.odom) else 0.0))
 
-    def handle(self, msg, f, times, st, arrived):
+    def process_sweep(self, msg, f, times, st, arrived):
         t0 = time.perf_counter()
         pts = cloud.xyz(f)
         keep = cloud.valid_mask(pts)
@@ -304,7 +314,8 @@ class LocalizerNode(Node):
         self.processed += 1
         self.rows.append((st, r.status, *r.t_map_base[:3, 3], se3.yaw_of(r.t_map_base), r.inlier_ratio,
                           r.structure_ratio, r.rmse, r.n_points, deskew_ms, tim.get('prepare', float('nan')),
-                          tim.get('icp', float('nan')), tim.get('search', float('nan')), total, latency))
+                          tim.get('icp', float('nan')), tim.get('search', float('nan')),
+                          deskew_ms + tim.get('total', float('nan')), total, latency))
         if self.processed % 50 == 0:
             self.get_logger().info('sweeps %d, status %s, inliers %.2f, total %.1f ms, latency %.1f ms, dropped %d'
                                    % (self.processed, r.status, r.inlier_ratio, total, latency, self.dropped))
@@ -332,20 +343,21 @@ class LocalizerNode(Node):
             od.twist = self.last_odom_msg.twist
         self.pub_odom.publish(od)
 
+        # every sweep goes into the paths; the growing messages are published at a lower rate
+        ps = PoseStamped()
+        ps.header = pm.header
+        fill_pose(ps.pose, r.t_map_base)
+        self.path.poses.append(ps)
+        self.path.header.stamp = pm.header.stamp
+        if self.t_map_odom0 is not None:
+            po = PoseStamped()
+            po.header = pm.header
+            fill_pose(po.pose, self.t_map_odom0 @ t_ob)
+            self.opath.poses.append(po)
+            self.opath.header.stamp = pm.header.stamp
         if self.processed % max(1, self.path_every) == 0:
-            ps = PoseStamped()
-            ps.header = pm.header
-            fill_pose(ps.pose, r.t_map_base)
-            self.path.poses.append(ps)
-            self.path.header.stamp = pm.header.stamp
             self.pub_path.publish(self.path)
-            if self.t_map_odom0 is not None:
-                po = PoseStamped()
-                po.header = pm.header
-                fill_pose(po.pose, self.t_map_odom0 @ t_ob)
-                self.opath.poses.append(po)
-                self.opath.header.stamp = pm.header.stamp
-                self.pub_opath.publish(self.opath)
+            self.pub_opath.publish(self.opath)
 
     def write_timings(self):
         if not self.timing_csv or not self.rows:
@@ -354,13 +366,16 @@ class LocalizerNode(Node):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('w', encoding='utf-8') as fh:
             fh.write('stamp,status,x,y,z,yaw,inlier_ratio,structure_ratio,rmse,n_points,deskew_ms,prepare_ms,icp_ms,search_ms,'
-                     'total_ms,latency_ms\n')
+                     'localization_ms,total_ms,latency_ms\n')
             for row in self.rows:
                 fh.write(','.join(str(v) if isinstance(v, str) else '%.6f' % v for v in row) + '\n')
+        loc_ms = np.array([r[-3] for r in self.rows], dtype=float)
         arr = np.array([r[-2] for r in self.rows], dtype=float)
         lat = np.array([r[-1] for r in self.rows], dtype=float)
         summary = {'sweeps': len(self.rows), 'dropped': self.dropped,
                    'status_counts': {s: sum(1 for r in self.rows if r[1] == s) for s in {r[1] for r in self.rows}},
+                   'localization_ms': {'p50': float(np.nanpercentile(loc_ms, 50)),
+                                       'p95': float(np.nanpercentile(loc_ms, 95)), 'max': float(np.nanmax(loc_ms))},
                    'total_ms': {'p50': float(np.nanpercentile(arr, 50)), 'p95': float(np.nanpercentile(arr, 95)),
                                 'max': float(np.nanmax(arr))},
                    'latency_ms': {'p50': float(np.nanpercentile(lat, 50)), 'p95': float(np.nanpercentile(lat, 95)),

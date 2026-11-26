@@ -42,7 +42,7 @@ def generate_launch_description():
         parameters=[cfg('params'), {'map_dir': cfg('map_dir'), 'init_mode': cfg('init_mode'),
                                     'timing_csv': cfg('timing_csv'), 'use_sim_time': use_sim}])
     play = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', cfg('bag'), '--clock', '100', '--rate', cfg('rate'),
+        cmd=['ros2', 'bag', 'play', cfg('bag'), '--clock', '100', '--rate', cfg('rate'), '--delay', '2.0',
              '--topics', '/utlidar/cloud_base', '/utlidar/robot_odom', '/utlidar/imu'],
         output='screen', condition=IfCondition(playing))
     rviz = Node(
