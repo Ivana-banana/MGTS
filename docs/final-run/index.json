@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "commit": "815c6e9303f8de883a0dc8041edbc3d82ed436eb",
+  "commands": {},
+  "complete": false,
+  "missing": [
+    "command:mapping",
+    "command:localization",
+    "command:playback",
+    "latency",
+    "rviz_top",
+    "rviz_third_person",
+    "output_bag"
+  ],
+  "files": [
+    {
+      "role": "provenance",
+      "path": "run.json",
+      "bytes": 77,
+      "sha256": "80490f2dc18e50404269bea509053b4bb95f2767c00fcb5f952e86f02eb52fa5"
+    },
+    {
+      "role": "mapping_input",
+      "path": "inputs/bag_for_mapping.zip",
+      "bytes": 114170436,
+      "sha256": "e2f0f28321eae5f75224c3ee09e27fad80588489911e0e53ec2383a88e940c86"
+    },
+    {
+      "role": "inspection_input",
+      "path": "inputs/bag_for_localization.zip",
+      "bytes": 101996018,
+      "sha256": "9ba414629b33947e18ef145b9c16f42e7c8d24b25209345d7253b0c2f5a7727d"
+    },
+    {
+      "role": "configuration",
+      "path": "profile.json",
+      "bytes": 325,
+      "sha256": "65edee6ce13ffd41627e45ffb58a7f5ca83f064ad362833415679832d8919aee"
+    }
+  ]
+}
