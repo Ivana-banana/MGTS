@@ -5,11 +5,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-import pytest
 import yaml
 
+import mgts_nav
 from mgts_nav.demo import PROFILE, generate
-from tools.package_solution import build
 
 
 def rename_volumes(data):
@@ -68,14 +67,10 @@ def test_utf8_volume_names_through_cli(tmp_path):
                 assert result == control[key]
 
 
-@pytest.mark.skipif(not (Path(__file__).resolve().parents[1] / ".git").exists(),
-                    reason="Building a historical ZIP needs the MGTS Git checkout")
 def test_solve_children_inherit_utf8_mode(tmp_path):
     data = tmp_path / 'recordings'
     generate(data)
     rename_volumes(data)
-    archive = tmp_path / 'runtime.zip'
-    archive.write_bytes(build('HEAD')[1])
     probe_file = tmp_path / 'inspect_child_mode.py'
     probe_file.write_text("""
 import sys
@@ -84,11 +79,16 @@ import mgts_nav
 mode, archive = sys.argv[1:]
 assert sys.flags.utf8_mode == int(mode)
 if archive:
+    assert sys.flags.isolated
     assert Path(archive) in Path(mgts_nav.__file__).parents
+    assert Path(__file__).parent == Path(archive)
 """, encoding='utf-8')
-    probe_archive = tmp_path / 'probe.zip'
-    probe_archive.write_bytes(archive.read_bytes())
-    with zipfile.ZipFile(probe_archive, 'a') as bundle:
+    # Both launches exercise the local sources even if HEAD moves during the test suite.
+    package_dir = Path(mgts_nav.__file__).resolve().parent
+    archive = tmp_path / 'runtime.zip'
+    with zipfile.ZipFile(archive, 'w') as bundle:
+        for source in package_dir.rglob('*.py'):
+            bundle.write(source, source.relative_to(package_dir.parent))
         bundle.write(probe_file, probe_file.name)
     probe = """
 import subprocess, sys
@@ -98,11 +98,12 @@ if location:
 from mgts_nav.solve import module_command
 subprocess.run(module_command('inspect_child_mode', mode, location), check=True)
 """
-    for label, location in [('git', ''), ('zip', str(archive))]:
+    for label, location in [('source', ''), ('zip', str(archive))]:
         isolation = ['-I'] if location else []
+        cwd = tmp_path if location else package_dir.parent
         for mode in (0, 1):
             subprocess.run([sys.executable, *isolation, '-X', f'utf8={mode}', '-c', probe,
-                            str(probe_archive) if location else '', str(mode)],
+                            location, str(mode)], cwd=cwd,
                            env=dict(os.environ, PYTHONUTF8=str(1-mode), PYTHONPATH=str(tmp_path)), check=True)
         startup = ['-m', 'mgts_nav.solve']
         if location:
@@ -110,7 +111,7 @@ subprocess.run(module_command('inspect_child_mode', mode, location), check=True)
                        "runpy.run_module('mgts_nav.solve', run_name='__main__', alter_sys=True)", location]
         subprocess.run([sys.executable, *isolation, '-X', 'utf8=1', *startup,
                         str(data/'mapping'), str(data/'inspection'), '--config', str(PROFILE),
-                        '--out', str(tmp_path/label)], env=dict(os.environ, PYTHONUTF8='0'), check=True)
+                        '--out', str(tmp_path/label)], cwd=cwd, env=dict(os.environ, PYTHONUTF8='0'), check=True)
     for path in ('map/map.pgm', 'map/map.yaml', 'map/trajectory.csv', 'inspection/trajectory.csv',
                  'inspection/continuous.csv', 'baseline/trajectory.csv'):
-        assert (tmp_path/'zip'/path).read_bytes() == (tmp_path/'git'/path).read_bytes()
+        assert (tmp_path/'zip'/path).read_bytes() == (tmp_path/'source'/path).read_bytes()
