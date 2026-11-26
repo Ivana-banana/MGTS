@@ -1,0 +1,10 @@
+/mgts/map3d:
+  history: keep_last
+  depth: 1
+  reliability: reliable
+  durability: transient_local
+/mgts/pose3d:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
