@@ -19,6 +19,7 @@ MODULES = (
     'pose_graph', 'profile', 'quality', 'drift_warning', 'recovery', 'rehearse', 'ros_export', 'self_check', 'slam', 'solve',
     'solve_audit', 'solve_manifest', 'start_confirmation', 'start_trial', 'stress', 'sync', 'vision',
     'visual_fusion', 'zones', 'event_uncertainty',
+    'current_scan', 'localize3d', 'replay_audit', 'result_bag_audit', 'ros_localize3d',
 )
 TESTS = (
     'ambiguity', 'aux_cli_input', 'bag', 'calibration', 'camera_demo', 'cli_input_audit',
@@ -34,6 +35,8 @@ TESTS = (
     'solve_manifest', 'solve_zones', 'split_bags', 'start_confirmation', 'start_search_cli', 'stress',
     'submap_controls', 'sync', 'sync_imu', 'turn_recovery', 'unicode_volume', 'velocity_prior', 'vision',
     'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones', 'event_uncertainty',
+    'current_scan', 'final_run_index', 'go2_motion_episodes', 'go2_revisit_check', 'go2_start_search',
+    'localize3d', 'replay_audit', 'result_bag_audit', 'scan_matching',
 )
 FILES = tuple(sorted((
     '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'requirements-win-amd64-py310.lock', 'pytest.ini',
@@ -101,6 +104,19 @@ FILES = tuple(sorted((
     'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
     'tools/obstacle_pose_controls.py', 'tools/post_gap_controls.py', 'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
     'tools/tum_depth_motion.py', 'tools/tum_sparse_depth.py', 'tools/tum_speed_bounds.py', 'tools/tum_visual_yaw.py',
+    'configs/go2-current-scan.rviz', 'configs/go2-official.json', 'configs/go2-result-qos.yaml',
+    'configs/go2-result.rviz', 'configs/go2-video-third-person.rviz', 'configs/go2-video-top.rviz',
+    'docs/final-go2.pdf', 'docs/final-run/README.md', 'docs/final-run/index.json',
+    'docs/final-run/run.json', 'docs/go2-baseline.md', 'docs/go2-contact.md', 'docs/go2-current-scan.png',
+    'docs/go2-independent-check.md', 'docs/go2-late-rviz.png', 'docs/go2-map-delivery.md',
+    'docs/go2-motion-episodes.md', 'docs/go2-organizer-image.md', 'docs/go2-revisit-check.md',
+    'docs/go2-start-control.png', 'docs/go2-start-search.md', 'docs/go2-video.md',
+    'docs/go2-windows-ros.md', 'tools/bag_delivery_prefix.py', 'tools/check_map_delivery.py',
+    'tools/compare_go2_replays.py', 'tools/evaluate_go2_localization.py', 'tools/final_run_index.py',
+    'tools/go2_cloud_frames.py', 'tools/go2_contact.py', 'tools/go2_corridor_sections.py',
+    'tools/go2_independent_check.py', 'tools/go2_live_replay.py', 'tools/go2_loop_surface_trial.py',
+    'tools/go2_motion_episodes.py', 'tools/go2_replay_view.py', 'tools/go2_start_search.py',
+    'tools/profile_go2_tracker.py',
     *(f'mgts_nav/{name}.py' for name in MODULES),
     *(f'tests/test_{name}.py' for name in TESTS),
 )))

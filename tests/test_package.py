@@ -137,6 +137,8 @@ def test_reproducible_committed_runtime(tmp_path):
         assert {name for name in names if name.startswith('configs/')} == {
             'configs/example.json', 'configs/inspection.rviz', 'configs/demo-zones.json',
             'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg',
+            'configs/go2-current-scan.rviz', 'configs/go2-official.json', 'configs/go2-result-qos.yaml',
+            'configs/go2-result.rviz', 'configs/go2-video-third-person.rviz', 'configs/go2-video-top.rviz',
         }
         tracked = subprocess.check_output(
             ['git', 'ls-tree', '-r', '--name-only', commit, '--', 'mgts_nav', 'tests', 'tools'],
