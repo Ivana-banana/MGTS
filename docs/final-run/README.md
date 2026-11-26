@@ -38,7 +38,8 @@ foreach ($view in 'top','third-person') {
 Copy-Item docs/final-run/index.json "$dest/bundle/index.json"
 python -m tools.final_run_index verify "$dest/bundle"
 python -m mgts_nav.replay_audit data/official/inspection "$dest/bundle/latency.csv"
-python -m mgts_nav.result_bag_audit data/official/inspection "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d --timings "$dest/bundle/latency.csv" --allow-missing-initial-scans 1
+Expand-Archive "$dest/bundle/inputs/bag_for_localization.zip" -DestinationPath "$dest/inputs"
+python -m mgts_nav.result_bag_audit "$dest/inputs/bag_for_localization" "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d --timings "$dest/bundle/latency.csv" --allow-missing-initial-scans 1
 ```
 
 Строгая приёмка включается через `--timings`: все заголовки сканов должны быть в журнале,

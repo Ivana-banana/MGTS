@@ -9,9 +9,11 @@ foreach ($route in 'mapping','inspection') {
     & $py -m mgts_nav.profile "data/official/$route" --lidar /utlidar/cloud_base --odom /utlidar/robot_odom --verify-frames
     & $py -m mgts_nav.sync "data/official/$route" --config configs/go2-official.json
 }
-& $py -m mgts_nav.solve data/official/mapping data/official/inspection --config configs/go2-official.json --map-cache out/issue6/go2-cache --initial 0 0 0 --out out/issue6/go2
+& $py -m mgts_nav.solve data/official/mapping data/official/inspection --config configs/go2-official.json --map-cache out/issue6/go2-cache --initial 0 0 0 --no-recover --out out/issue6/go2
 & $py -m mgts_nav.solve_audit data/official/mapping data/official/inspection out/issue6/go2
 ```
+
+Флаг `--no-recover` воспроизводит опубликованный прогон: с #227 восстановление включено по умолчанию. Без флага на `5215a77` инспекция даёт 1357 сопоставлений, 168 прогнозов, одно восстановление из 26 попыток и конечную позу (4,49; −1,03) м. Без `--initial` автостарт на этой паре отказывает: первый скан инспекции на 27 мс раньше первой одометрии.
 
 ## Потоки и время
 
