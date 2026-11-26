@@ -56,7 +56,16 @@ class Localizer(Node):
                                  qos_profile_sensor_data)
 
     def on_odom(self, message):
-        self.odometry.append((stamp(message), *odometry_sample(message)))
+        timestamp = stamp(message)
+        if self.odometry and timestamp <= self.odometry[-1][0]:
+            previous = self.odometry[-1][0]
+            reason = 'duplicate' if timestamp == previous else 'backward'
+            # Never reset the buffer implicitly: a clock reset requires a node restart.
+            self.get_logger().warning(
+                f'Dropping {reason} odometry timestamp {timestamp:.9f}; '
+                f'last accepted {previous:.9f}. Restart node after a clock reset.')
+            return
+        self.odometry.append((timestamp, *odometry_sample(message)))
         if self.pending:
             self.process()
 
@@ -115,6 +124,8 @@ class Localizer(Node):
     def log_scan(self, scan, status):
         self.csv.writerow([scan[0], status, (perf_counter() - scan[3]) * 1000, len(self.pending)])
         self.timings.flush()
+        if status not in ('matched', 'prediction_only'):
+            self.get_logger().warning(f'Skipping scan {scan[0]:.9f}: {status}')
 
 
 def main():
