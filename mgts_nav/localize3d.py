@@ -23,6 +23,23 @@ class Pose:
     def apply(self, points):
         return self.rotation.apply(points) + self.xyz
 
+    def compose(self, child):
+        return Pose(self.rotation * child.rotation, self.apply(child.xyz))
+
+
+def alignment_argument(parser):
+    parser.add_argument("--map-from-odom", type=float, nargs=4,
+                        metavar=("X", "Y", "Z", "YAW_RAD"),
+                        help="Known inspection odom-to-map transform, metres and radians")
+
+
+def alignment_pose(values):
+    if values is None:
+        return None
+    if not np.isfinite(values).all():
+        raise ValueError("--map-from-odom requires finite XYZ and yaw")
+    return Pose(Rotation.from_euler("z", values[3]), np.array(values[:3]))
+
 
 class CorrectionFilter:
     """Smooth the map correction while retaining odometry's short-term motion."""
@@ -173,7 +190,9 @@ def main():
     parser.add_argument('mapping', type=Path)
     parser.add_argument('inspection', type=Path)
     parser.add_argument('--out', type=Path, required=True)
+    alignment_argument(parser)
     args = parser.parse_args()
+    alignment = alignment_pose(args.map_from_odom)
     args.out.mkdir(parents=True)
     started = perf_counter()
     clouds = [pose.apply(points) for _, points, pose, _ in scans(args.mapping)]
@@ -186,6 +205,8 @@ def main():
     odom_positions = []
     raw_positions = []
     for t, cloud, initial, started in scans(args.inspection):
+        if alignment is not None:
+            initial = alignment.compose(initial)
         held_out = np.arange(len(cloud)) % 4 == 0
         raw, accepted = surface.align(cloud[~held_out], initial)
         pose = filt.update(t, initial, raw, accepted)

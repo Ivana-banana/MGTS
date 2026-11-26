@@ -62,3 +62,15 @@ def test_pose_correction_holds_while_registration_is_unavailable():
     next_odom = localize3d.Pose(identity, np.array([0.05, 0, 0]))
     predicted = filt.update(0.14, next_odom, next_odom, False)
     np.testing.assert_allclose(predicted.xyz - corrected.xyz, [0.05, 0, 0])
+
+
+def test_known_alignment_composes_odom_translation_and_body_roll():
+    assert localize3d.alignment_pose(None) is None
+    transform = localize3d.alignment_pose([4, -2, 1, np.pi / 2])
+    odom = localize3d.Pose(Rotation.from_euler("x", .4), np.array([3., 1., .5]))
+    result = transform.compose(odom)
+    np.testing.assert_allclose(result.xyz, [3, 1, 1.5], atol=1e-14)
+    lidar_point = [1., 2., 3.]
+    np.testing.assert_allclose(result.apply(lidar_point), transform.apply(odom.apply(lidar_point)))
+    with np.testing.assert_raises(ValueError):
+        localize3d.alignment_pose([1, 2, np.nan, 0])

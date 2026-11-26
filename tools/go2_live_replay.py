@@ -17,6 +17,7 @@ from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2
 
 from mgts_nav.ros_localize3d import Localizer
+from mgts_nav.localize3d import alignment_argument
 
 
 def ns(stamp):
@@ -65,13 +66,13 @@ class Capture(Node):
         self.poses += 1
 
 
-def run(inspect_bag, map_file, output):
+def run(inspect_bag, map_file, output, map_from_odom=None):
     output.mkdir(parents=True)
     rclpy.init()
     with (output / "timings.csv").open("x", newline="") as timings, (
             output / "arrivals.csv").open("x", newline="") as arrivals, (
             output / "player.log").open("x") as log:
-        node = Localizer(map_file, timings)
+        node = Localizer(map_file, timings, map_from_odom)
         capture = Capture(output / "result", arrivals)
         executor = SingleThreadedExecutor()
         executor.add_node(node)
@@ -106,4 +107,5 @@ if __name__ == "__main__":
     parser.add_argument("inspect_bag", type=Path)
     parser.add_argument("map_file", type=Path)
     parser.add_argument("output", type=Path)
+    alignment_argument(parser)
     run(**vars(parser.parse_args()))

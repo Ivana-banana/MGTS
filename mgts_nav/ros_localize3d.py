@@ -18,7 +18,8 @@ from sensor_msgs_py.point_cloud2 import create_cloud_xyz32, read_points
 from std_msgs.msg import Header
 from tf2_ros import TransformBroadcaster
 
-from .localize3d import CorrectionFilter, Motion, SurfaceMap, odometry_sample, scan_points
+from .localize3d import (CorrectionFilter, Motion, SurfaceMap, alignment_argument,
+                         alignment_pose, odometry_sample, scan_points)
 
 
 def stamp(message):
@@ -27,8 +28,9 @@ def stamp(message):
 
 
 class Localizer(Node):
-    def __init__(self, map_file, timings_file):
+    def __init__(self, map_file, timings_file, map_from_odom=None):
         super().__init__('mgts_localize3d')
+        self.alignment = alignment_pose(map_from_odom)
         with np.load(map_file) as data:
             xyz = data['xyz']
         self.surface = SurfaceMap(xyz)
@@ -82,6 +84,8 @@ class Localizer(Node):
             points = motion.deskew(t, xyz, offsets)
             selected = np.arange(len(points)) % 4 != 0
             prior = motion.at(t)
+            if self.alignment is not None:
+                prior = self.alignment.compose(prior)
             fit, accepted = self.surface.align(points[selected], prior)
             self.publish_pose(self.filter.update(t, prior, fit, accepted), header_stamp)
             self.log_scan(scan, 'matched' if accepted else 'prediction_only')
@@ -113,10 +117,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('map', type=Path)
     parser.add_argument('--timings', type=Path, required=True)
+    alignment_argument(parser)
     args = parser.parse_args(remove_ros_args()[1:])
     rclpy.init()
     with args.timings.open('x', newline='', encoding='utf-8') as timings:
-        node = Localizer(args.map, timings)
+        node = Localizer(args.map, timings, args.map_from_odom)
         try:
             rclpy.spin(node)
         except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
