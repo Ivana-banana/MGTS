@@ -8,3 +8,6 @@ CLAUDE.local.md
 __pycache__/
 .pytest_cache/
 Сервисная робототехника — Код города — 13.11.2026.mp4
+/ros2_ws/build/
+/ros2_ws/install/
+/ros2_ws/log/
