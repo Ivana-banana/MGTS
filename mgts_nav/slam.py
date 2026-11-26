@@ -8,6 +8,7 @@ from scipy.spatial import cKDTree
 
 
 MIN_MATCH_POINTS = 12
+MATCH_RADIUS_M = .45
 
 
 def checked_pose(values):
@@ -84,7 +85,7 @@ class VelocityPrior:
             self.history.clear()
 
 
-def match(scan, tree, seed, radius=0.45):
+def match(scan, tree, seed, radius=MATCH_RADIUS_M):
     """Trimmed point-to-point ICP. Return the prior if support is insufficient."""
     pose = seed.copy()
     fraction = 0.0
@@ -120,6 +121,59 @@ def match(scan, tree, seed, radius=0.45):
     return pose, fraction, True
 
 
+def point_to_line_rows(offset, translation, centers, normals, lever):
+    residual = np.sum(normals * (offset + translation - centers), axis=1)
+    yaw = (-normals[:, 0] * offset[:, 1] + normals[:, 1] * offset[:, 0]) / lever
+    return residual, np.column_stack((normals, yaw))
+
+
+class PointToLine:
+    """Fit a fixed map while using the predicted pose as a prior."""
+
+    def __init__(self, tree):
+        self.tree = tree
+        _, neighbors = tree.query(tree.data, k=8)
+        patches = tree.data[neighbors]
+        self.centers = patches.mean(axis=1)
+        offsets = patches - self.centers[:, None]
+        values, axes = np.linalg.eigh(offsets.transpose(0, 2, 1) @ offsets)
+        self.normals = axes[:, :, 0]
+        self.linear = (values[:, 0] <= .12 * values[:, 1]) & (values[:, 1] > 0)
+
+    def refine(self, scan, seed, predicted, *, odom_translation=False):
+        # Express translation and rotation in metres using the scan RMS range.
+        lever = np.sqrt(np.mean(np.sum(scan ** 2, axis=1)))
+        scale = np.array([1., 1., lever])
+        prior = np.diag([.10, .10, .50])
+        pose = seed.copy()
+        for _ in range(8):
+            offset = scan @ rotation(pose[2]).T
+            distances, indices = self.tree.query(offset + pose[:2])
+            keep = (distances < .16) & self.linear[indices]
+            if np.count_nonzero(keep) < 12:
+                return None
+            ids = indices[keep]
+            residual, jacobian = point_to_line_rows(
+                offset[keep], pose[:2], self.centers[ids], self.normals[ids], lever)
+            # Huber weights with a 4 cm threshold.
+            weights = .04 / np.maximum(.04, np.abs(residual))
+            weighted_transpose = jacobian.T * weights / len(weights)
+            delta = (pose - seed) * scale
+            if odom_translation:
+                # Cap the radial influence of translation from odometry at 1 cm.
+                shift = np.linalg.norm(delta[:2])
+                prior[0, 0] = prior[1, 1] = .10 if shift <= .01 else .10 * .01 / shift
+            gradient = weighted_transpose @ residual + prior @ delta
+            step = np.linalg.solve(weighted_transpose @ jacobian + prior, -gradient) / scale
+            pose += step
+            if np.linalg.norm(step[:2]) < .0001 and abs(step[2]) < .0001:
+                break
+        support = float(np.mean(self.tree.query(world(scan, pose))[0] < .16))
+        if support >= .40 and np.linalg.norm(pose[:2] - predicted[:2]) <= 1.5 * MATCH_RADIUS_M:
+            return pose, support
+        return None
+
+
 @dataclass
 class Estimate:
     t: float
@@ -138,18 +192,46 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocit
     predict_step = predict if velocity_prior is None else velocity_prior.predict
     pose = checked_pose(initial)
     tree = None if building else cKDTree(map_points)
+    refinement = PointToLine(tree) if tree is not None and tree.n >= 8 else None
     previous = None
+    previous_t = None
+    previous_fit = False
+    velocity_bias = np.zeros(2)
     keyframes = deque(maxlen=18)
     keypose = None
     for scan in stream:
-        predicted = predict_step(pose, previous, scan)
+        raw_prediction = predict_step(pose, previous, scan)
+        predicted = raw_prediction
+        odom_step = previous is not None and scan.odom is not None
+        has_translation = scan.odom is not None and (odom_step or previous_t is None)
+        dt = scan.t - previous_t if refinement is not None and odom_step else 0.
+        if dt > 0.:
+            speed = np.linalg.norm(velocity_bias)
+            if speed > .06:
+                predicted = raw_prediction.copy()
+                predicted[:2] += dt * (1. - .06 / speed) * velocity_bias
+        else:
+            velocity_bias.fill(0.)
         previous = scan.odom
         pose, support, status = predicted, 0.0, 'prediction_only'
+        refined = None
         if tree is None and len(scan.xy) >= MIN_MATCH_POINTS:
             status = 'origin'
         elif tree is not None:
             pose, support, accepted = match(scan.xy, tree, predicted)
             if accepted:
+                # Use ICP for unmeasured translation and keep the measured turn.
+                seed = predicted if has_translation else pose
+                if not has_translation and scan.gyro_delta is not None:
+                    seed = np.r_[pose[:2], predicted[2]]
+                refined = (refinement.refine(scan.xy, seed, predicted, odom_translation=has_translation)
+                           if refinement is not None else None)
+                if refined is not None:
+                    pose, support = refined
+                    if previous_fit and dt > 0.:
+                        # Filter the difference between lidar and raw odometry in map m/s.
+                        measured = (pose[:2] - raw_prediction[:2]) / dt
+                        velocity_bias += -np.expm1(-dt / .4) * (measured - velocity_bias)
                 status = 'matched'
         if recovery is not None:
             recovered = recovery.update(scan, status == 'matched')
@@ -159,12 +241,16 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocit
                 distances = tree.query(world(scan.xy, pose))[0]
                 support = float(np.mean(distances < .16))
                 status = 'matched'
+                velocity_bias.fill(0.)
+                refined = None
         if drift_recovery is not None:
             confirmed = drift_recovery.update(scan, pose, support, status == 'matched', tree)
             if confirmed is not None:
                 pose = confirmed
                 support = float(np.mean(tree.query(world(scan.xy, pose))[0] < .16))
                 status = 'matched'
+                velocity_bias.fill(0.)
+                refined = None
             elif drift_recovery.uncertain:
                 status = 'uncertain'
         if building and status != 'prediction_only':
@@ -177,6 +263,8 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocit
                 _, ids = np.unique(np.floor(joined / 0.06), axis=0, return_index=True)
                 tree = cKDTree(joined[ids])
                 keypose = pose.copy()
+        previous_t = scan.t
+        previous_fit = refined is not None
         reason = None
         if status == 'prediction_only':
             if not len(scan.xy):

@@ -19,7 +19,7 @@
 
 ## Проверить за один запуск
 
-Из корня MGTS в локальном Windows PowerShell один раз подготовьте окружение Python 3.10.
+Из корня MGTS подготовьте окружение. На Linux используйте [команды для Bash](#окружение-команды), затем выполните `python -m mgts_nav.rehearse out/my-first-demo`. Ниже приведены команды для Windows PowerShell.
 
 ```powershell
 py -3.10 -m venv .venv-mgts
@@ -89,10 +89,43 @@ python -m mgts_nav.solve data/mapping data/inspection --config data/mapping.json
 
 ## Окружение команды
 
-В обычном Windows PowerShell команда ниже показывает также причины пропуска отдельных тестов.
+Создайте виртуальное окружение из корня проекта. В Bash на Linux используйте Python 3.11 или 3.10.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+```
+
+Если Python 3.11 установлен через `uv` и его нет в `PATH`, укажите путь из `uv python find 3.11` вместо `python3.11`.
+
+На Windows используйте PowerShell и окружение `.venv-mgts` из раздела [«Проверить за один запуск»](#проверить-за-один-запуск). После активации окружения выполните:
+
+```sh
+python -m pip install -r requirements.txt pytest
+python -m pytest -q -rs
+```
+
+Для проверки через Docker:
+
+```sh
+docker build -t mgts-nav .
+docker run --rm mgts-nav python -m mgts_nav --help
+```
+
+Для записи результатов из контейнера смонтируйте каталог вывода.
+
+В Bash:
+
+```bash
+mkdir -p out
+docker run --rm --mount "type=bind,source=$(pwd)/out,target=/out" mgts-nav python -m mgts_nav.rehearse /out/container-01
+```
+
+В PowerShell:
 
 ```powershell
-& .\.venv-mgts\Scripts\python.exe -m pytest -q -rs
+New-Item -ItemType Directory -Force out | Out-Null
+docker run --rm --mount "type=bind,source=$((Resolve-Path out).Path),target=/out" mgts-nav python -m mgts_nav.rehearse /out/container-01
 ```
 
 Для проверки C++ откройте Developer PowerShell x64 с доступным `cl.exe` в той же папке проекта и выполните `& .\.venv-mgts\Scripts\python.exe -m pytest -q tests/test_native_grid.py`. Тест сам собирает DLL во временном каталоге, запускает Python- и C++-варианты и сравнивает файлы результата. Полевой тест поиска по участкам карты использует локальные данные опыта №94 и пропускается, если они ещё не подготовлены. [Сборка C++](docs/native-grid.md) · [Полевые данные №94](https://github.com/Ivana-banana/MGTS/issues/94)
