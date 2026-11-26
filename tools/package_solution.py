@@ -11,51 +11,23 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = (
-    '__init__', '__main__', 'bag', 'benchmark', 'calibration', 'camera_demo', 'camera_info', 'clock_experiment',
-    'coarse_start', 'continuous', 'delayed_start', 'demo', 'deskew', 'glass_experiment', 'grid',
-    'image_pairs', 'initialization', 'interior_loop', 'leveling', 'loop', 'map_cache', 'map_eval', 'metrics',
-    'motion_disagreement', 'multiscan', 'native_grid', 'observability', 'obstacles', 'plan_alignment',
-    'pose_graph', 'profile', 'quality', 'drift_warning', 'recovery', 'rehearse', 'ros_export', 'self_check', 'slam', 'solve',
-    'solve_audit', 'solve_manifest', 'start_confirmation', 'start_trial', 'stress', 'sync', 'vision',
-    'visual_fusion', 'zones', 'event_uncertainty',
-    'current_scan', 'localize3d', 'replay_audit', 'result_bag_audit', 'ros_localize3d',
-)
-TESTS = (
-    'ambiguity', 'aux_cli_input', 'bag', 'calibration', 'camera_demo', 'cli_input_audit',
-    'coarse_corridor', 'coarse_start_budget', 'continuous', 'corridor', 'delayed_start_controls', 'demo',
-    'custom_lidar', 'deskew', 'deskew_experiment', 'glass_experiment', 'gyro_deskew', 'heap1_warning_score', 'image_pairs', 'imu_availability',
-    'initialization', 'intake', 'intel_lab', 'intel_laser_clock', 'intel_longitudinal',
-    'intel_order_odom', 'intel_scan_pair', 'interior_loop', 'joint_outage', 'laser_scan', 'leveling',
-    'leveling_experiment', 'loop', 'map_cache', 'map_eval', 'map_yaml', 'mapping_rejections', 'metrics',
-    'motion_disagreement', 'multiscan', 'native_grid', 'observability', 'obstacles', 'organized_solve',
-    'plan_alignment', 'plot_quality', 'plot_zones', 'point_time_semantics', 'pose_graph',
-    'prepared_window', 'profile', 'quality', 'recording_order', 'recovery', 'rehearsal', 'ros1_pipeline',
-    'ros_export', 'route_preview', 'scan_pair_overlap', 'scan_rejections', 'self_check', 'solve', 'solve_audit',
-    'solve_manifest', 'solve_zones', 'split_bags', 'start_confirmation', 'start_search_cli', 'stress',
-    'submap_controls', 'sync', 'sync_imu', 'turn_recovery', 'unicode_volume', 'velocity_prior', 'vision',
-    'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones', 'event_uncertainty',
-    'current_scan', 'final_run_index', 'go2_motion_episodes', 'go2_revisit_check', 'go2_start_search', 'go2_subscriber_audit',
-    'localize3d', 'replay_audit', 'result_bag_audit', 'scan_matching',
-)
+INCLUDE_TRACKED_PYTHON = True
 FILES = tuple(sorted((
     '.dockerignore', 'Dockerfile', 'README.md', 'requirements.txt', 'requirements-win-amd64-py310.lock', 'pytest.ini',
     'configs/demo-zones.json', 'configs/example.json', 'configs/inspection.rviz', 'docs/ambiguity.md',
-    'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg', 'tools/custom_lidar.py',
+    'configs/custom_lidar/Packet.msg', 'configs/custom_lidar/Return.msg',
     'docs/drift-warning-trial.md', 'docs/independent-icp.md', 'docs/kitti-repeat.md',
-    'docs/jury-field-example.html', 'tools/jury_report.py',
+    'docs/jury-field-example.html',
     'docs/clock-windows.md', 'mgts_nav/clock_windows.py', 'tests/test_clock_windows.py',
-    'tools/clock_window_trial.py', 'tools/revision_benchmark.py',
-    'docs/drift-recovery-trial.md', 'tools/drift_recovery_trial.py',
-    'docs/event-uncertainty.md', 'tools/event_uncertainty_trial.py',
-    'docs/gait-slip.md', 'tools/gait_slip_trial.py',
-    'docs/heldout-floorplan.md', 'docs/heldout-floorplan.png', 'tools/heldout_floorplan.py',
-    'docs/internal-graph-trial.md', 'tools/internal_graph_trial.py',
-    'docs/velocity-transfer.md', 'tools/velocity_transfer.py',
-    'docs/visual-solve-transfer.md', 'tools/visual_solve_transfer.py',
-    'docs/ray-start-trial.md', 'tools/ray_start_trial.py',
-    'docs/stable-occupancy-trial.md', 'tools/stable_occupancy_trial.py',
-    'tools/drift_warning_trial.py', 'tools/independent_icp.py', 'tools/kitti_repeat.py', 'tools/kitti_warning_trial.py',
+    'docs/drift-recovery-trial.md',
+    'docs/event-uncertainty.md',
+    'docs/gait-slip.md',
+    'docs/heldout-floorplan.md', 'docs/heldout-floorplan.png',
+    'docs/internal-graph-trial.md',
+    'docs/velocity-transfer.md',
+    'docs/visual-solve-transfer.md',
+    'docs/ray-start-trial.md',
+    'docs/stable-occupancy-trial.md',
     'docs/angular-recovery-controls.md', 'docs/camera-diagnosis.csv', 'docs/camera-diagnosis.md',
     'docs/camera-experiment.md', 'docs/clock-offset.md', 'docs/coarse-corridor.md',
     'docs/coarse-start.md', 'docs/corridor.md', 'docs/delayed-start-controls.md', 'docs/delayed-start.md',
@@ -82,28 +54,7 @@ FILES = tuple(sorted((
     'docs/solve-manifest.md', 'docs/start-confirmation.md', 'docs/submap-search-profile.md',
     'docs/submap-start-controls.md', 'docs/visit-agreement.md', 'docs/zones.md',
     'docs/tum-depth-motion.md', 'docs/tum-visual-yaw.md',
-    'tools/angular_recovery_controls.py', 'tools/benchmark_grid_memory.py', 'tools/benchmark_length.py',
-    'tools/benchmark_native_grid.py', 'tools/diagnose_camera.py', 'tools/evaluate_camera.py',
-    'tools/delayed_after_gap.py', 'tools/evaluate_deskew.py', 'tools/evaluate_false_visits.py', 'tools/evaluate_joint_outage.py',
-    'tools/evaluate_leveling.py', 'tools/evaluate_lidar_extrinsics.py', 'tools/evaluate_micrometre.py',
-    'tools/evaluate_motion_disagreement.py', 'tools/evaluate_visit_agreement.py',
-    'tools/evaluate_zone_visits.py', 'tools/heap1_clock_lag.py', 'tools/heap1_drift.py',
-    'tools/heap1_factorial.py', 'tools/heap1_gyro_dropout.py', 'tools/heap1_holdout.py',
-    'tools/heap1_inspection_deskew.py', 'tools/heap1_micrometre.py', 'tools/heap1_long_mapping.py', 'tools/heap1_map_anchors.py',
-    'tools/heap1_point_times.py', 'tools/heap1_revisit.py', 'tools/heap1_sample.py',
-    'tools/heap1_stationary_start.py', 'tools/heap1_submap_holdout.py', 'tools/heap1_submap_start.py',
-    'tools/heap1_warning_inputs.py', 'tools/heap1_warning_score.py',
-    'tools/heap1_surface_trial.py', 'tools/heap1_timed_bag.py', 'tools/heap1_turn_recovery.py',
-    'tools/heap1_velocity_prior.py', 'tools/intel_lab.py', 'tools/intel_laser_clock.py',
-    'tools/intel_laserscan.py',
-    'tools/intel_scan_divergence.py',
-    'tools/intel_voxel_ablation.py',
-    'tools/intel_longitudinal.py', 'tools/intel_order_odom.py', 'tools/intel_scan_pair.py',
-    'tools/__init__.py', 'tools/laser_scan.py', 'tools/repeat_solve.py',
-    'tools/native_grid.cpp', 'tools/package_solution.py', 'tools/plot_heap1_drift.py',
-    'tools/plot_heap1_revisit.py', 'tools/plot_quality.py', 'tools/plot_zones.py',
-    'tools/obstacle_pose_controls.py', 'tools/post_gap_controls.py', 'tools/pr20_interrupts.py', 'tools/profile_submap_search.py', 'tools/scan_pair_overlap.py',
-    'tools/tum_depth_motion.py', 'tools/tum_sparse_depth.py', 'tools/tum_speed_bounds.py', 'tools/tum_visual_yaw.py',
+    'tools/native_grid.cpp',
     'configs/go2-current-scan.rviz', 'configs/go2-official.json', 'configs/go2-result-qos.yaml',
     'configs/go2-result.rviz', 'configs/go2-video-third-person.rviz', 'configs/go2-video-top.rviz',
     'docs/final-go2.pdf', 'docs/final-run/README.md', 'docs/final-run/index.json',
@@ -111,19 +62,22 @@ FILES = tuple(sorted((
     'docs/go2-independent-check.md', 'docs/go2-late-rviz.png', 'docs/go2-map-delivery.md',
     'docs/go2-motion-episodes.md', 'docs/go2-organizer-image.md', 'docs/go2-revisit-check.md',
     'docs/go2-start-control.png', 'docs/go2-start-search.md', 'docs/go2-video.md',
-    'docs/go2-windows-ros.md', 'tools/bag_delivery_prefix.py', 'tools/check_map_delivery.py',
-    'tools/compare_go2_replays.py', 'tools/evaluate_go2_localization.py', 'tools/final_run_index.py',
-    'tools/go2_cloud_frames.py', 'tools/go2_contact.py', 'tools/go2_corridor_sections.py',
-    'tools/go2_independent_check.py', 'tools/go2_live_replay.py', 'tools/go2_loop_surface_trial.py',
-    'tools/go2_motion_episodes.py', 'tools/go2_replay_view.py', 'tools/go2_start_search.py',
-    'tools/go2_subscriber_audit.py', 'tools/go2_subscriber_latency.py', 'tools/profile_go2_tracker.py',
-    *(f'mgts_nav/{name}.py' for name in MODULES),
-    *(f'tests/test_{name}.py' for name in TESTS),
+    'docs/go2-windows-ros.md',
 )))
 
 
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT)
+
+
+def runtime_source(path):
+    directory, _, filename = path.partition('/')
+    stem, suffix = os.path.splitext(filename)
+    if suffix != '.py' or not stem.isascii() or not stem.isidentifier():
+        return False
+    if directory == 'tests':
+        return stem.startswith('test_') and filename != 'test_package.py'
+    return directory in ('mgts_nav', 'tools')
 
 
 def revision_files(commit):
@@ -153,6 +107,10 @@ def revision_files(commit):
             paths.extend(prefix + name + '.py' for name in names)
         else:
             raise ValueError('Unsupported inventory entry in ' + commit)
+    policy = declarations.get('INCLUDE_TRACKED_PYTHON')
+    if isinstance(policy, ast.Constant) and policy.value is True:
+        sources = git('ls-tree', '-r', '-z', '--name-only', commit, '--', 'mgts_nav', 'tools', 'tests')
+        paths.extend(name for name in sources.decode('utf-8').split('\0') if runtime_source(name))
     return tuple(sorted(paths))
 
 
@@ -187,13 +145,15 @@ def build(revision):
     return commit, output.getvalue()
 
 
-def verify(path, expected_digest, files=FILES):
+def verify(path, expected_digest, files=None):
     with path.open('rb') as stream:
         actual = hashlib.sha256()
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             actual.update(block)
         if actual.hexdigest() != expected_digest:
             raise ValueError('SHA-256 differs from the selected revision')
+        if files is None:
+            files = revision_files(git('rev-parse', '--verify', 'HEAD^{commit}').decode().strip())
         with zipfile.ZipFile(stream) as archive:
             if tuple(archive.namelist()) != files or archive.testzip() is not None:
                 raise ValueError('ZIP membership or CRC mismatch')

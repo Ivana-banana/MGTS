@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import posixpath
+from pathlib import PurePosixPath
 import re
 import subprocess
 import sys
@@ -143,7 +144,16 @@ def test_reproducible_committed_runtime(tmp_path):
         tracked = subprocess.check_output(
             ['git', 'ls-tree', '-r', '--name-only', commit, '--', 'mgts_nav', 'tests', 'tools'],
             encoding='utf-8').splitlines()
-        assert set(tracked) - {'tests/test_package.py'} <= set(names)
+        source_files = set()
+        for filename in tracked:
+            path = PurePosixPath(filename)
+            if (len(path.parts) == 2 and path.suffix == '.py' and path.stem.isascii()
+                    and path.stem.isidentifier() and filename != 'tests/test_package.py'
+                    and (path.parent.name != 'tests' or path.stem.startswith('test_'))):
+                source_files.add(filename)
+        assert source_files | {'tools/native_grid.cpp'} == {
+            name for name in names if name.startswith(('mgts_nav/', 'tests/', 'tools/'))
+        }
         assert {'Dockerfile', '.dockerignore', 'pytest.ini', 'docs/package.md'} <= set(names)
         for guide in (name for name in names if name.endswith('.md')):
             for link in re.findall(r'\]\(([^ )]+)\)', result.read(guide).decode('utf-8-sig')):
