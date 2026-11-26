@@ -1,0 +1,65 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Global Options:
+    Fixed Frame: map
+    Background Color: 18; 25; 38
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Поверхности стен
+      Enabled: true
+      Topic:
+        Value: /rviz_go2/walls
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Пройденный путь
+      Enabled: true
+      Topic:
+        Value: /rviz_go2/trail
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Робот Go2
+      Enabled: true
+      Topic:
+        Value: /rviz_go2/robot
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Исходное облако карты
+      Enabled: false
+      Topic:
+        Value: /mgts/map3d
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+      Color Transformer: FlatColor
+      Color: 240; 163; 91
+      Style: Points
+      Size (Pixels): 2
+      Decay Time: 0
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Target Frame: map
+      Angle: 1.5707963
+      Scale: 33
+      X: 0.23
+      Y: 8.40
+Window Geometry:
+  X: 0
+  Y: 0
+  Width: 1280
+  Height: 800
+  Hide Left Dock: true
+  Hide Right Dock: true
