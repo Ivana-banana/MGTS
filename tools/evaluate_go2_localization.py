@@ -14,6 +14,8 @@ Every trajectory is compared on the same inspection scans without a ground truth
 
 Only planar x, y and yaw are compared, so the 2D method and the 3D tracker share one
 measure.  The relative pose does not depend on the map frame or on the start pose.
+Use --fixed-reference to select pairs and registration seeds from odometry alone.
+The report includes a comparison on pairs with poses from every supplied method.
 """
 
 import argparse
@@ -207,7 +209,30 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def evaluate(inspection, track_paths):
+def revisit_summary(pairs, methods):
+    result = {}
+    for name in methods:
+        errors = [row[name] for row in pairs if name in row]
+        if not errors:
+            continue
+        metres = np.array([e['error_m'] for e in errors])
+        degrees = np.array([e['error_deg'] for e in errors])
+        bad = (metres > FALSE_ANCHOR_M) | (degrees > FALSE_ANCHOR_DEG)
+        anchored = np.array([e['anchored'] for e in errors])
+        result[name] = {
+            'pairs': len(errors),
+            'median_m': round(float(np.median(metres)), 4), 'p95_m': round(float(np.percentile(metres, 95)), 4),
+            'max_m': round(float(metres.max()), 4),
+            'median_deg': round(float(np.median(degrees)), 3), 'p95_deg': round(float(np.percentile(degrees, 95)), 3),
+            'over_threshold': int(bad.sum()), 'false_anchors': int((bad & anchored).sum()),
+            'anchored_pairs': int(anchored.sum())}
+    return result
+
+
+def evaluate(inspection, track_paths, *, fixed_reference=False):
+    reserved = {'odometry', 'i', 'j', 'ti_s', 'tj_s', 'reference', 'agreed', 'inliers'}
+    if collisions := reserved.intersection(track_paths):
+        raise ValueError(f'reserved track name: {", ".join(sorted(collisions))}')
     stream = list(scans(inspection))
     times = np.array([s[0] for s in stream])
     clouds = [s[1] for s in stream]
@@ -228,13 +253,13 @@ def evaluate(inspection, track_paths):
     for window, mask in masks.items():
         report['windows'][window] = {name: status_summary(times, labels[name], period, mask) for name in tracks}
 
-    pairs = revisit_pairs(times, poses)
+    reference_tracks = {'odometry': poses['odometry']} if fixed_reference else poses
+    pairs = revisit_pairs(times, reference_tracks)
     rows = []
     for i, j in pairs:
-        guesses = {}
-        for name in tracks:
-            if np.all(np.isfinite(poses[name][[i, j], 0])):
-                guesses[name] = lift(relative(poses[name][i], poses[name][j]), odom[i], odom[j])
+        available = {name for name, track in poses.items() if np.isfinite(track[[i, j]]).all()}
+        guesses = {name: lift(relative(track[i], track[j]), odom[i], odom[j])
+                   for name, track in reference_tracks.items() if name in available}
         base = relative(poses['odometry'][i], poses['odometry'][j])
         for k, offset in enumerate(PERTURBATIONS):
             guesses[f'perturbed{k}'] = lift(base + np.array(offset), odom[i], odom[j])
@@ -244,7 +269,7 @@ def evaluate(inspection, track_paths):
                'reference': None if reference is None else [round(float(v), 4) for v in reference],
                'agreed': agreed, 'inliers': None if inliers is None else round(inliers, 3)}
         for name in tracks:
-            if reference is None or name not in guesses:
+            if reference is None or name not in available:
                 continue
             delta = relative(poses[name][i], poses[name][j]) - reference
             row[name] = {'error_m': round(float(np.hypot(*delta[:2])), 4),
@@ -253,23 +278,12 @@ def evaluate(inspection, track_paths):
         rows.append(row)
 
     checked = [r for r in rows if r['reference'] is not None]
-    report['revisits'] = {'candidates': len(rows), 'with_reference': len(checked), 'methods': {}}
-    for name in tracks:
-        errors = [r[name] for r in checked if name in r]
-        if not errors:
-            continue
-        metres = np.array([e['error_m'] for e in errors])
-        degrees = np.array([e['error_deg'] for e in errors])
-        bad = (metres > FALSE_ANCHOR_M) | (degrees > FALSE_ANCHOR_DEG)
-        anchored = np.array([e['anchored'] for e in errors])
-        report['revisits']['methods'][name] = {
-            'pairs': len(errors),
-            'median_m': round(float(np.median(metres)), 4), 'p95_m': round(float(np.percentile(metres, 95)), 4),
-            'max_m': round(float(metres.max()), 4),
-            'median_deg': round(float(np.median(degrees)), 3), 'p95_deg': round(float(np.percentile(degrees, 95)), 3),
-            'over_threshold': int(bad.sum()),
-            'false_anchors': int((bad & anchored).sum()),
-            'anchored_pairs': int(anchored.sum())}
+    report['revisits'] = {'candidates': len(rows), 'with_reference': len(checked),
+                          'methods': revisit_summary(checked, tracks)}
+    if fixed_reference:
+        common = [row for row in checked if tracks.keys() <= row.keys()]
+        report['revisits']['reference_mode'] = 'odometry'
+        report['revisits']['common'] = {'pairs': len(common), 'methods': revisit_summary(common, tracks)}
     return report, rows
 
 
@@ -278,11 +292,13 @@ def main():
     parser.add_argument('inspection', type=Path)
     parser.add_argument('--track', action='append', default=[], metavar='NAME=CSV',
                         help='trajectory to evaluate; repeat for several methods')
+    parser.add_argument('--fixed-reference', action='store_true',
+                        help='use odometry to select pairs and initialize scan-to-scan registration')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     tracks = dict(item.split('=', 1) for item in args.track)
     args.out.mkdir(parents=True)
-    report, rows = evaluate(args.inspection, tracks)
+    report, rows = evaluate(args.inspection, tracks, fixed_reference=args.fixed_reference)
     report['inputs'] = {
         'inspection': {p.name: sha256(p) for p in sorted(args.inspection.glob('*.mcap'))},
         'tracks': {name: {'path': str(path), 'sha256': sha256(path)} for name, path in tracks.items()},
