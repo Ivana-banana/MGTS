@@ -25,11 +25,16 @@ class TimedTree:
         return result
 
 
-def profile(path, map_file, csv_file):
+def profile(path, map_file, csv_file, native=None):
     with np.load(map_file) as data:
         surface = SurfaceMap(data["xyz"])
-    surface.tree = TimedTree(surface.tree)
-    surface.plane_tree = TimedTree(surface.plane_tree)
+    if native is None:
+        surface.tree = TimedTree(surface.tree)
+        surface.plane_tree = TimedTree(surface.plane_tree)
+    else:
+        # The C++ core does its own neighbour search: neighbors_ms stays 0, align is in rest_of_align_ms.
+        from mgts_nav.native_surface import NativeSurface, load_dll
+        surface = NativeSurface(surface, load_dll(native))
     filt = CorrectionFilter()
     rows = []
     with reader(path) as bag:
@@ -56,12 +61,13 @@ def profile(path, map_file, csv_file):
             prior = motion.at(t)
             selected = points[np.arange(len(points)) % 4 != 0]
             ready = perf_counter_ns()
-            surface.tree.elapsed_ns = surface.plane_tree.elapsed_ns = 0
+            if native is None:
+                surface.tree.elapsed_ns = surface.plane_tree.elapsed_ns = 0
             raw_pose, accepted = surface.align(selected, prior)
             aligned = perf_counter_ns()
             pose = filt.update(t, prior, raw_pose, accepted)
             end = perf_counter_ns()
-            query = surface.tree.elapsed_ns + surface.plane_tree.elapsed_ns
+            query = 0 if native else surface.tree.elapsed_ns + surface.plane_tree.elapsed_ns
             costs = np.array([decoded-start, filtered-decoded, ready-filtered, query,
                               aligned-ready-query, end-aligned, end-start]) / 1e6
             rows.append([t, *pose.xyz, *pose.rotation.as_quat(), accepted, *costs])
@@ -84,4 +90,5 @@ if __name__ == "__main__":
     parser.add_argument("path", type=Path)
     parser.add_argument("map_file", type=Path)
     parser.add_argument("csv_file", type=Path)
+    parser.add_argument("--native", type=Path, help="DLL built from tools/native_surface.cpp instead of SciPy")
     print(json.dumps(profile(**vars(parser.parse_args())), indent=2))
