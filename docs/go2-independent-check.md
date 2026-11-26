@@ -37,5 +37,13 @@
 
 ~~~~powershell
 python -m mgts_nav map data/official/mapping --config configs/go2-official.json --out out/issue185-independent/rebuilt-map
-python -m tools.go2_independent_check data/official/mapping data/official/inspection configs/go2-official.json out/issue185-independent/rebuilt-map/map.yaml out/issue197/full3d/map.npz out/issue197/live-full/result out/issue197/live-full/timings.csv
+python -m tools.go2_independent_check data/official/mapping data/official/inspection configs/go2-official.json out/issue185-independent/rebuilt-map/map.yaml out/issue197/full3d/map.npz out/issue197/live-full/result out/issue197/live-full/timings.csv --initial-2d 0.6885090890781002 -0.08860270417168761 0.36243389954860206
 ~~~~
+
+## Интервал из #184
+
+Дополнительно проверено окно, указанное в первоначальном описании отказа: от 40,5 с до конца записи. Это ретроспективный срез, помимо трёх заранее выбранных окон. Из 962 сканов 3D-прогон #197 дал 962 matched в кадре map; 2D при общем старте дал 383 matched, из них 47 отмечены по предварительному критерию. У 3D отмечено 0 из 962. Медианные остатки до карты у одометрии / 2D / 3D равны 6,02 / 31,57 / 5,57 см.
+
+Общая исходная планарная поза в кадре 3D-карты — (1,69891 м; 0,47793 м; 0,80282 рад). Для проверки в команде выше передаётся её эквивалент в кадре 2D-карты. Несогласованное начальное значение останавливает сравнение. После первой опубликованной позы 3D не переходил в чистый прогноз, максимальный интервал между соседними позами составил 94,51 мс. Время восстановления после потери привязки внутри маршрута по этому прогону измерить нельзя: такого события не произошло. После первой пропущенной метки публикация началась через 77,93 мс. Последняя серия чистого прогноза 2D продолжалась до конца записи.
+
+Для воспроизведения 1× используется фиксированная карта с вокселем 0,12 м и 38 251 точкой, штатный прогноз, компенсация движения внутри скана, 3D point-to-plane ICP и фильтр поправок из a5ad606. [Команда полного прогона и аудит меток](https://github.com/Ivana-banana/MGTS/issues/197#issuecomment-7186009229). Автоматический старт на другой начальной позе оценивается отдельно в #188.

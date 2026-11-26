@@ -16,7 +16,8 @@ from mgts_nav.slam import relative, track, world
 
 
 METHODS = ('odom', '2d', '3d')
-WINDOWS = {'all': (0, 110), 'start': (0, 10), 'turn': (38, 46), 'end': (99, 110)}
+WINDOWS = {'all': (0, 110), 'start': (0, 10), 'turn': (38, 46), 'end': (99, 110),
+           'historical_gap': (40.5, 110)}
 
 
 def planar(pose):
@@ -59,6 +60,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('mapping', 'inspection', 'config', 'map2d', 'map3d', 'live', 'timings'):
         parser.add_argument(name, type=Path)
+    parser.add_argument('--initial-2d', type=float, nargs=3, metavar=('X', 'Y', 'YAW'),
+                        help='explicit 2D start in its map frame, checked against the recorded 3D prior')
     args = parser.parse_args()
     with args.timings.open() as stream:
         timings = {float(row['header_s']): row['status'] for row in csv.DictReader(stream)}
@@ -67,6 +70,10 @@ def main():
     poses3d = live_poses(args.live)
     first, _, prior, _ = next(scans(args.inspection))
     start = relative(origin, planar(prior))
+    if args.initial_2d is not None:
+        if not np.allclose(args.initial_2d, start, atol=1e-8, rtol=0):
+            parser.error('--initial-2d differs from the recorded common start')
+        start = np.array(args.initial_2d)
     sliced = (s for s in scans2d(args.inspection, load_config(args.config)) if s.t >= first)
     rows2d = {r.t: r for r in track(sliced, start, map_points=read_map(args.map2d)[2])}
     with np.load(args.map3d) as data:
