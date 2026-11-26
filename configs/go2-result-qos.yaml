@@ -8,3 +8,14 @@
   depth: 10
   reliability: reliable
   durability: volatile
+# Diagnostic bag of mgts_nav.current_scan (#198) is written without offered QoS.
+/map_points:
+  history: keep_last
+  depth: 1
+  reliability: reliable
+  durability: transient_local
+/current_scan:
+  history: keep_last
+  depth: 5
+  reliability: reliable
+  durability: volatile

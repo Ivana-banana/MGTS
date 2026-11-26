@@ -1,5 +1,6 @@
 import json
 import math
+from pathlib import Path
 import subprocess
 import sys
 
@@ -8,7 +9,7 @@ import pytest
 import yaml
 from PIL import Image
 from rosbags.highlevel import AnyReader
-from rosbags.interfaces import QosDurability
+from rosbags.interfaces import QosDurability, QosHistory, QosReliability
 
 from mgts_nav.ros_export import export
 
@@ -38,6 +39,18 @@ def test_cli_round_trip_geometry_stamps_and_qos(inputs, tmp_path):
         for topic in ['/map', '/path']:
             assert topics[topic].ext.offered_qos_profiles[0].durability == QosDurability.TRANSIENT_LOCAL
         assert topics['/pose'].ext.offered_qos_profiles[0].durability == QosDurability.VOLATILE
+        displays = yaml.safe_load((Path(__file__).resolve().parents[1] /
+                                   'configs/inspection.rviz').read_text(encoding='utf-8'))
+        subscriptions = {d['Topic']['Value']: d['Topic']
+                         for d in displays['Visualization Manager']['Displays']}
+        for topic, connection in topics.items():
+            profile, = connection.ext.offered_qos_profiles
+            assert profile.reliability == QosReliability.RELIABLE
+            assert profile.history == QosHistory.KEEP_LAST
+            assert profile.depth == (10 if topic == '/pose' else 1)
+            subscription = subscriptions[topic]
+            assert subscription['Reliability Policy'] == 'Reliable'
+            assert subscription['Durability Policy'] == ('Volatile' if topic == '/pose' else 'Transient Local')
         msgs = {topic: [] for topic in topics}
         for conn, t, raw in reader.messages():
             msg = reader.deserialize(raw, conn.msgtype)

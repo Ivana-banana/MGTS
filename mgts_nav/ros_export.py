@@ -3,11 +3,12 @@
 python -m mgts_nav.ros_export MAP.yaml TRAJECTORY.csv OUTPUT_BAG
 ros2 bag play OUTPUT_BAG
 
-Start RViz before playback. Set Fixed Frame to map and add Map (/map),
-Pose (/pose), and Path (/path). /map arrives at the first pose, /pose advances
+Set RViz Fixed Frame to map and add Map (/map), Pose (/pose), and Path (/path).
+The fixed 2D OccupancyGrid /map is written once at the first pose, /pose advances
 on the original CSV clock, and /path shows the full result at the last pose.
 Select Transient Local durability for Map and Path for late subscription while
-the player is alive. All headers use map coordinates, so no TF tree is needed.
+the player is alive; RViz may start before or during playback. No PointCloud2
+map is exported. All headers use map coordinates, so no TF tree is needed.
 """
 import argparse
 import csv

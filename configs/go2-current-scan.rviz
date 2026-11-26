@@ -11,6 +11,8 @@ Visualization Manager:
       Enabled: true
       Topic:
         Value: /map_points
+        Depth: 1
+        Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Transformer: FlatColor
       Color: 156; 170; 183
@@ -21,6 +23,8 @@ Visualization Manager:
       Enabled: true
       Topic:
         Value: /current_scan
+        Depth: 5
+        Durability Policy: Volatile
         Reliability Policy: Reliable
       Color Transformer: FlatColor
       Color: 255; 125; 45
