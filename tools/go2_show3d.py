@@ -178,7 +178,7 @@ def build_model(model_xml, boxes, floor_z, bounds, size, detour=None):
     spec.visual.global_.offwidth, spec.visual.global_.offheight = w, h
     spec.visual.quality.shadowsize = 8192
     spec.visual.quality.offsamples = 8
-    spec.visual.headlight.ambient = [0.42, 0.42, 0.44]
+    spec.visual.headlight.ambient = [0.30, 0.30, 0.32]
     spec.visual.headlight.diffuse = [0.45, 0.45, 0.45]
     spec.visual.headlight.specular = [0.05, 0.05, 0.05]
     spec.visual.rgba.haze = [0.93, 0.94, 0.96, 1]
@@ -186,8 +186,8 @@ def build_model(model_xml, boxes, floor_z, bounds, size, detour=None):
     spec.add_texture(name='sky', type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
                      rgb1=[0.97, 0.97, 0.98], rgb2=[0.86, 0.88, 0.91], width=512, height=3072)
     spec.add_texture(name='grid', type=mujoco.mjtTexture.mjTEXTURE_2D, builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-                     mark=mujoco.mjtMark.mjMARK_EDGE, rgb1=[0.93, 0.93, 0.92], rgb2=[0.93, 0.93, 0.92],
-                     markrgb=[0.80, 0.81, 0.83], width=512, height=512)
+                     mark=mujoco.mjtMark.mjMARK_EDGE, rgb1=[0.74, 0.75, 0.77], rgb2=[0.74, 0.75, 0.77],
+                     markrgb=[0.64, 0.65, 0.68], width=512, height=512)
     floor = spec.add_material(name='floor_grid', texrepeat=[0.5, 0.5], texuniform=True, reflectance=0.06)
     floor.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = 'grid'
     spec.add_material(name='wall', rgba=[0.80, 0.83, 0.87, 1], specular=0.1, shininess=0.1)
@@ -212,7 +212,7 @@ def build_model(model_xml, boxes, floor_z, bounds, size, detour=None):
                              diffuse=[0.35, 0.35, 0.35], specular=[0.1, 0.1, 0.1], castshadow=False,
                              type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL)
     spec.body('base').add_light(name='key', mode=mujoco.mjtCamLight.mjCAMLIGHT_TRACKCOM, pos=[0.8, -0.6, 3.2],
-                                dir=[-0.25, 0.19, -1], diffuse=[0.55, 0.55, 0.55], specular=[0.2, 0.2, 0.2],
+                                dir=[-0.25, 0.19, -1], diffuse=[0.32, 0.32, 0.32], specular=[0.1, 0.1, 0.1],
                                 cutoff=50, exponent=2, castshadow=True, type=mujoco.mjtLightType.mjLIGHT_SPOT)
     for geom in spec.geoms:
         geom.contype, geom.conaffinity = 0, 0
@@ -406,7 +406,10 @@ def render(args):
     bounds = ((pose_xyz[:, 0].min() - pad, pose_xyz[:, 0].max() + pad), (pose_xyz[:, 1].min() - pad, pose_xyz[:, 1].max() + pad))
     inside = ((points[:, 0] > bounds[0][0] - 3) & (points[:, 0] < bounds[0][1] + 3)
               & (points[:, 1] > bounds[1][0] - 3) & (points[:, 1] < bounds[1][1] + 3))
-    boxes = wall_boxes(points[inside], floor_z, floor_z + args.wall_cut)
+    # Cells the robot body passed through during inspection cannot be static walls; do not draw them.
+    from scipy.spatial import cKDTree
+    swept = cKDTree(pose_xyz[:, :2]).query(points[:, :2], distance_upper_bound=args.swept_radius)[0] < args.swept_radius
+    boxes = wall_boxes(points[inside & ~swept], floor_z, floor_z + args.wall_cut)
     detour = json.loads(Path(args.detour).read_text(encoding='utf-8')) if args.detour else None
     model = build_model(args.model, boxes, floor_z, bounds, (w, h), detour)
     data = mujoco.MjData(model)
@@ -509,7 +512,8 @@ def render(args):
                    lowest_foot_minus_floor_m_p5_p50_p95=np.percentile(lows - floor_z, [5, 50, 95]).round(4).tolist(),
                    map_points_near_route_below_floor_plus_0_25_m=dict(count=int(len(map_floor)),
                        z_p10_p50_p90=np.percentile(map_floor, [10, 50, 90]).round(4).tolist() if len(map_floor) else None)),
-        walls=dict(boxes=len(boxes), voxel_m=VOXEL_M, cut_above_floor_m=args.wall_cut, source='map.npz of run a5ad606'),
+        walls=dict(boxes=len(boxes), voxel_m=VOXEL_M, cut_above_floor_m=args.wall_cut, source='map.npz of run a5ad606',
+                   hidden_points_within_swept_radius=int(swept.sum()), swept_radius_m=args.swept_radius),
         model_detour=detour_info, stills=still_paths,
         sha256={k: sha256(v) for k, v in sources.items() if Path(v).is_file()},
         sources=sources,
@@ -593,8 +597,9 @@ def main(argv=None):
     p.add_argument('--seconds', type=float, help='render only the first N seconds of the inspection (preview)')
     p.add_argument('--still', type=float, nargs='*', default=[52.0], help='inspection seconds to save as PNG')
     p.add_argument('--wall-cut', type=float, default=0.5, help='wall height above the floor, m')
-    p.add_argument('--distance', type=float, default=6.5)
-    p.add_argument('--elevation', type=float, default=-72)
+    p.add_argument('--swept-radius', type=float, default=0.3, help='hide map points this close to published poses, m')
+    p.add_argument('--distance', type=float, default=3.6)
+    p.add_argument('--elevation', type=float, default=-58)
     p.add_argument('--intro', type=float, default=3.0)
     p.add_argument('--outro', type=float, default=1.5)
     p.add_argument('--title-hold', type=float, default=2.0)
