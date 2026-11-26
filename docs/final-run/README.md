@@ -1,38 +1,35 @@
-# Индекс комплекта Go2
+# Комплект официального прогона Go2 на 1×
 
-Индекс связывает заявленную версию решения и команды прогона с байтами, передаваемыми экспертам. После прогона #182 положите в отдельный каталог комплекта следующие файлы. Сохраните исходные имена томов внутри каталога bag.
+[Скачать результат для команды, ZIP 1,86 МБ](https://github.com/Ivana-banana/MGTS/releases/download/mgts-data-2026-11-26/go2-live-full-a5ad606.zip). Архив доступен участникам приватного репозитория. Доступ экспертов согласуется в #186. Для полной сдачи ожидаются два видео RViz из #191.
 
-| Путь в комплекте | Содержимое |
-|---|---|
-| run.json | Полный SHA коммита решения и команды выполненного прогона |
-| inputs/bag_for_mapping.zip, inputs/bag_for_localization.zip | Два исходных архива из релиза mgts-data-2026-11-26 |
-| profile.json | Конфигурация, с которой выполнен прогон |
-| bag/metadata.yaml и тома | Выходной rosbag2. Список томов читается из relative_file_paths |
-| latency.csv | Замеры задержки публикации позы из #182 |
-| video/top.mp4, video/third-person.mp4 | Записи RViz сверху и от третьего лица из #191 |
+В архиве лежат выходной rosbag2 (metadata.yaml и result_0.mcap), карта map.npz, замеры latency.csv, конфигурация profile.json, команды run.json и индекс index.json. Входные архивы перечислены с хешами в индексе и доступны отдельно из ранее опубликованного релиза. Размер ZIP с результатами 1 859 258 байт, SHA-256 `1b107f8ca9026ceb8c060e61452c85c2c87706493019a20f05ccd3c20303af89`.
 
-В run.json укажите полную ревизию проверенного исходного кода в поле commit. В объекте commands сохраните строки mapping, localization и playback с фактическими командами, включая аргументы, из этого прогона. Команды сохраняются как текст. Проверяющий инструмент их не запускает.
+## Что проверено
 
-Из корня MGTS в PowerShell соберите индекс рядом с файлами. Получатель скачивает те же байты вместе с index.json и запускает проверку. Порядок томов берётся из метаданных bag.
+Скачанная копия содержит 38 251 воксель. Оба сообщения карты побайтно совпали по массивам float32 XYZ с map.npz. Из 1525 сканов инспекции получено 1524 позы в кадре map на точных метках исходных сканов. На первом скане одометрия отсутствовала. Для 1524 строк matched задержка от начала обработки скана в callback до записи результата после публикации позы составила p50 12,03 мс, p95 25,25 мс и p99 31,77 мс. Это время данного локального прогона ROS 2 на Windows.
 
-~~~~powershell
-python -m tools.final_run_index build out/final-delivery
-python -m tools.final_run_index verify out/final-delivery
-~~~~
+Команды построения и локализации в [run.json](run.json). Версия кода воспроизведения a5ad606 содержит побайтно идентичную копию использованного скрипта. Отдельная ревизия профилей воспроизведения указана там же. Для просмотра откройте RViz до старта player и запустите в отдельном терминале активированного ROS 2:
 
-Верификация повторно вычисляет размер и SHA-256 каждого указанного файла и сравнивает весь индекс. При расхождении, отсутствии файла или команды процесс завершится с кодом 1. Воспроизведение bag, содержание видео и происхождение материалов от указанного коммита проверяются по результатам реального прогона.
+```powershell
+rviz2 -d configs/go2-result.rviz
+```
 
-## Проверенный промежуточный набор
+```powershell
+ros2 bag play out/verify-go2/bundle/bag --qos-profile-overrides-path configs/go2-result-qos.yaml
+```
 
-Соседние run.json и index.json описывают только входные архивы и профиль. В каталоге inputs нужны исходные ZIP из [релиза MGTS](https://github.com/Ivana-banana/MGTS/releases/tag/mgts-data-2026-11-26). Профиль берётся из Git-объекта [configs/go2-official.json](https://github.com/Ivana-banana/MGTS/blob/815c6e9303f8de883a0dc8041edbc3d82ed436eb/configs/go2-official.json) в исходной кодировке с оригинальными переводами строк.
+## Скачать и проверить
 
-~~~~powershell
-$bundle = 'out/verify-final-inputs'
-New-Item -ItemType Directory -Force "$bundle/inputs" | Out-Null
-gh release download mgts-data-2026-11-26 -D "$bundle/inputs" -p 'bag_for_*.zip'
-Copy-Item docs/final-run/index.json "$bundle/index.json"
-python -c "from pathlib import Path; import subprocess,sys; p=Path(sys.argv[1]); (p/'profile.json').write_bytes(subprocess.check_output(['git','show','815c6e9303f8de883a0dc8041edbc3d82ed436eb:configs/go2-official.json'])); (p/'run.json').write_bytes(Path('docs/final-run/run.json').read_bytes().replace(b'\r\n',b'\n'))" $bundle
-python -m tools.final_run_index verify $bundle --allow-partial
-~~~~
+Из корня MGTS в PowerShell с доступом к приватному репозиторию. Входные ZIP нужны для полной сверки происхождения. Для просмотра достаточно архива с результатом.
 
-Поле missing перечисляет недостающие роли и команды. Без явного --allow-partial промежуточный набор проверку полного комплекта не проходит. Доступ экспертов к итоговой публикации отслеживается в #186.
+```powershell
+$dest = 'out/verify-go2'
+gh release download mgts-data-2026-11-26 -D $dest -p go2-live-full-a5ad606.zip
+Get-FileHash "$dest/go2-live-full-a5ad606.zip"
+Expand-Archive "$dest/go2-live-full-a5ad606.zip" -DestinationPath "$dest/bundle"
+gh release download mgts-data-2026-11-26 -D "$dest/bundle/inputs" -p 'bag_for_*.zip'
+python -m tools.final_run_index verify "$dest/bundle" --allow-partial
+python -m mgts_nav.result_bag_audit data/official/inspection "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d
+```
+
+Проверка восьми файлов прошла на повторно скачанном результате с ранее проверенными входными ZIP. В [индексе](index.json) статус complete равен false. После получения обоих видео запишите их как video/top.mp4 и video/third-person.mp4 и выполните build и verify инструмента tools.final_run_index без --allow-partial.

@@ -1,23 +1,22 @@
 {
   "schema": 1,
-  "commit": "815c6e9303f8de883a0dc8041edbc3d82ed436eb",
-  "commands": {},
+  "commit": "a5ad606167c82d7d462a3de9dc2fae889315cf06",
+  "commands": {
+    "mapping": "python -m mgts_nav.localize3d data/official/mapping data/official/inspection --out out/issue197/full3d",
+    "localization": "python -m tools.go2_live_replay data/official/inspection out/issue197/full3d/map.npz out/issue197/live-full",
+    "playback": "ros2 bag play out/issue197/live-full/result --qos-profile-overrides-path configs/go2-result-qos.yaml"
+  },
   "complete": false,
   "missing": [
-    "command:mapping",
-    "command:localization",
-    "command:playback",
-    "latency",
     "rviz_top",
-    "rviz_third_person",
-    "output_bag"
+    "rviz_third_person"
   ],
   "files": [
     {
       "role": "provenance",
       "path": "run.json",
-      "bytes": 77,
-      "sha256": "80490f2dc18e50404269bea509053b4bb95f2767c00fcb5f952e86f02eb52fa5"
+      "bytes": 530,
+      "sha256": "9ef312eafe1673e1929045b04c730530001a29cef2bd254ce0a17ed384b5f1f8"
     },
     {
       "role": "mapping_input",
@@ -34,8 +33,32 @@
     {
       "role": "configuration",
       "path": "profile.json",
-      "bytes": 325,
-      "sha256": "65edee6ce13ffd41627e45ffb58a7f5ca83f064ad362833415679832d8919aee"
+      "bytes": 308,
+      "sha256": "34f36cac349a67ea50a58c256f0c63fc357cd6e39a28138583ee0dce75b28215"
+    },
+    {
+      "role": "map_3d",
+      "path": "map.npz",
+      "bytes": 874579,
+      "sha256": "a11f1018e944ea1a060c2a39a39639e57cae5f233d69eddcc034c56ea7cec579"
+    },
+    {
+      "role": "latency",
+      "path": "latency.csv",
+      "bytes": 73760,
+      "sha256": "783c6f10b4a72ac2c820854f5b5cc61c93166d71708f72e114785de0fb154543"
+    },
+    {
+      "role": "bag_metadata",
+      "path": "bag/metadata.yaml",
+      "bytes": 900,
+      "sha256": "180d9ecf768a0d05894644b2177430c8b63b50f2d0ef84476203aaa686a7f4a0"
+    },
+    {
+      "role": "bag_volume",
+      "path": "bag/result_0.mcap",
+      "bytes": 1115539,
+      "sha256": "e79e4bf23ed03e1e9ea0a32b850fca66efed3b6783912f52eaebd4384711f2e1"
     }
   ]
 }

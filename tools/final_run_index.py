@@ -13,6 +13,7 @@ ROLES = {
     "mapping_input": "inputs/bag_for_mapping.zip",
     "inspection_input": "inputs/bag_for_localization.zip",
     "configuration": "profile.json",
+    "map_3d": "map.npz",
     "latency": "latency.csv",
     "rviz_top": "video/top.mp4",
     "rviz_third_person": "video/third-person.mp4",

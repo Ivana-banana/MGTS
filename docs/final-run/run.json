@@ -1,4 +1,9 @@
 {
-  "commit": "815c6e9303f8de883a0dc8041edbc3d82ed436eb",
-  "commands": {}
+  "commit": "a5ad606167c82d7d462a3de9dc2fae889315cf06",
+  "commands": {
+    "mapping": "python -m mgts_nav.localize3d data/official/mapping data/official/inspection --out out/issue197/full3d",
+    "localization": "python -m tools.go2_live_replay data/official/inspection out/issue197/full3d/map.npz out/issue197/live-full",
+    "playback": "ros2 bag play out/issue197/live-full/result --qos-profile-overrides-path configs/go2-result-qos.yaml"
+  },
+  "playback_configuration_commit": "f92e403924a9b0942d4abdf349038d376ef26fd1"
 }
