@@ -35,7 +35,7 @@ TESTS = (
     'solve_manifest', 'solve_zones', 'split_bags', 'start_confirmation', 'start_search_cli', 'stress',
     'submap_controls', 'sync', 'sync_imu', 'turn_recovery', 'unicode_volume', 'velocity_prior', 'vision',
     'tum_depth_motion', 'tum_sparse_depth', 'visit_agreement', 'visual_fusion', 'zones', 'event_uncertainty',
-    'current_scan', 'final_run_index', 'go2_motion_episodes', 'go2_revisit_check', 'go2_start_search',
+    'current_scan', 'final_run_index', 'go2_motion_episodes', 'go2_revisit_check', 'go2_start_search', 'go2_subscriber_audit',
     'localize3d', 'replay_audit', 'result_bag_audit', 'scan_matching',
 )
 FILES = tuple(sorted((
@@ -116,7 +116,7 @@ FILES = tuple(sorted((
     'tools/go2_cloud_frames.py', 'tools/go2_contact.py', 'tools/go2_corridor_sections.py',
     'tools/go2_independent_check.py', 'tools/go2_live_replay.py', 'tools/go2_loop_surface_trial.py',
     'tools/go2_motion_episodes.py', 'tools/go2_replay_view.py', 'tools/go2_start_search.py',
-    'tools/profile_go2_tracker.py',
+    'tools/go2_subscriber_audit.py', 'tools/go2_subscriber_latency.py', 'tools/profile_go2_tracker.py',
     *(f'mgts_nav/{name}.py' for name in MODULES),
     *(f'tests/test_{name}.py' for name in TESTS),
 )))
