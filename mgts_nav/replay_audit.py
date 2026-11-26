@@ -27,11 +27,12 @@ def scan_headers(path, topic):
     return headers
 
 
-def audit(source, timings, topic):
+def audit(source, timings, topic, *, include_publications=False):
     expected = scan_headers(source, topic)
     logged = Counter()
     statuses = Counter()
     pose_latencies = []
+    published = []
     max_pending = 0
     with timings.open(encoding='utf-8-sig', newline='') as stream:
         rows = csv.DictReader(stream)
@@ -53,21 +54,26 @@ def audit(source, timings, topic):
             max_pending = max(max_pending, pending)
             if status in ('matched', 'prediction_only'):
                 pose_latencies.append(latency)
+                published.append(header)
 
     percentiles = None
     if pose_latencies:
         p50, p95, p99 = np.percentile(pose_latencies, (50, 95, 99)).tolist()
         percentiles = dict(p50=p50, p95=p95, p99=p99)
-    return dict(input_scans=sum(expected.values()), logged_scans=sum(logged.values()),
+    result = dict(input_scans=sum(expected.values()), logged_scans=sum(logged.values()),
                 missing_headers_s=sorted((expected - logged).elements()),
                 extra_headers_s=sorted((logged - expected).elements()), status=statuses,
-                max_pending=max_pending, pose_latency_ms=percentiles)
+                max_pending=max_pending, pose_latency_ms=percentiles,
+                published_poses=len(published))
+    if include_publications:
+        result['published_headers_s'] = published
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
-        epilog='Exit 1 for missing or extra scans, queue overflow, or scans pending at shutdown.')
+        epilog='Exit 1 for missing or extra scans, zero poses, queue overflow, or scans pending at shutdown.')
     parser.add_argument('source', type=Path, help='Full input bag used for replay')
     parser.add_argument('timings', type=Path, help='timings.csv from ros_localize3d')
     parser.add_argument('--lidar', default='/utlidar/cloud_base')
@@ -79,7 +85,8 @@ def main():
     print(json.dumps(result, indent=2))
     status = result['status']
     return int(bool(result['missing_headers_s'] or result['extra_headers_s']
-                    or status['queue_full'] or status['unprocessed']))
+                    or status['queue_full'] or status['unprocessed']
+                    or not result['published_poses']))
 
 
 if __name__ == '__main__':

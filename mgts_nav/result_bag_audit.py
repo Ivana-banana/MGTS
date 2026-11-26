@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from .bag import cloud_xyz, reader
+from .replay_audit import audit as audit_replay
 
 
 def topic_connections(bag, topic, msgtype):
@@ -19,7 +20,10 @@ def timestamp_ns(header):
     return header.stamp.sec * 1_000_000_000 + header.stamp.nanosec
 
 
-def audit(inspection, result, scan_topic, map_topic, pose_topic, frame):
+def audit(inspection, result, scan_topic, map_topic, pose_topic, frame,
+          timings=None, allow_missing_initial_scans=0):
+    if allow_missing_initial_scans < 0 or (allow_missing_initial_scans and timings is None):
+        raise ValueError('Initial scan allowance requires --timings and a nonnegative count')
     with reader(inspection) as bag:
         scans = topic_connections(bag, scan_topic, "sensor_msgs/msg/PointCloud2")
         stamps = [timestamp_ns(bag.deserialize(raw, c.msgtype).header)
@@ -57,6 +61,23 @@ def audit(inspection, result, scan_topic, map_topic, pose_topic, frame):
             previous = t
     if not emitted or not map_messages:
         raise ValueError("Result requires both a map and poses")
+    if timings is not None:
+        log = audit_replay(inspection, timings, scan_topic, include_publications=True)
+        if (log['missing_headers_s'] or log['extra_headers_s'] or not log['published_poses']
+                or log['status']['queue_full'] or log['status']['unprocessed']):
+            raise ValueError('Publication log has missing/extra scans, zero poses, or unfinished scans')
+        # The existing CSV stores float seconds. Resolve each header to an exact
+        # source nanosecond stamp; fail closed if float precision is ambiguous.
+        by_seconds = {ns // 10**9 + (ns % 10**9) * 1e-9: ns for ns in stamps}
+        if len(by_seconds) != len(stamps):
+            raise ValueError('Source timestamps are ambiguous at publication log precision')
+        published = {by_seconds[t] for t in log['published_headers_s']}
+        unexpected_missing = source_stamps - published - set(stamps[:allow_missing_initial_scans])
+        if unexpected_missing:
+            raise ValueError(f'Unexpected unpublished scan timestamps: {sorted(unexpected_missing)}')
+        if emitted != published:
+            raise ValueError(f'Recorded poses differ from publication log: '
+                             f'missing={sorted(published - emitted)}, extra={sorted(emitted - published)}')
     return dict(map_messages=map_messages, source_scans=len(stamps), poses=len(emitted),
                 coverage=len(emitted) / len(stamps), missing_scan_ns=sorted(source_stamps - emitted))
 
@@ -69,6 +90,10 @@ if __name__ == "__main__":
     parser.add_argument("--map-topic", default="/map_points")
     parser.add_argument("--pose-topic", default="/pose")
     parser.add_argument("--frame", default="map")
+    parser.add_argument("--timings", type=Path,
+                        help="Enable acceptance: reconcile exact pose stamps with the publication CSV")
+    parser.add_argument("--allow-missing-initial-scans", type=int, default=0,
+                        help="Allow unpublished poses only among the first N source scans (default: 0)")
     try:
         print(json.dumps(audit(**vars(parser.parse_args()))))
     except (OSError, ValueError) as exc:

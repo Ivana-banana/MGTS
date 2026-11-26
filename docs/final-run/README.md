@@ -37,7 +37,16 @@ foreach ($view in 'top','third-person') {
 }
 Copy-Item docs/final-run/index.json "$dest/bundle/index.json"
 python -m tools.final_run_index verify "$dest/bundle"
-python -m mgts_nav.result_bag_audit data/official/inspection "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d
+python -m mgts_nav.replay_audit data/official/inspection "$dest/bundle/latency.csv"
+python -m mgts_nav.result_bag_audit data/official/inspection "$dest/bundle/bag" --pose-topic /mgts/pose3d --map-topic /mgts/map3d --timings "$dest/bundle/latency.csv" --allow-missing-initial-scans 1
 ```
+
+Строгая приёмка включается через `--timings`: все заголовки сканов должны быть в журнале,
+а точные метки записанных поз — совпадать с публикациями `matched` и `prediction_only`.
+Для штатного Go2 явно разрешён пропуск только первого скана; любые другие пропуски,
+расхождения с журналом и ноль поз дают ненулевой код. Успех — код 0; нарушение
+приёмки bag — код 2, ноль поз в `replay_audit` — код 1.
+Без `--timings` остаётся форматная сводка для намеренно неполных экспериментов:
+ненулевое покрытие само по себе не подтверждает полноту результата.
 
 Проверка всех десяти файлов скачанного комплекта прошла со статусом complete=True. Оба MP4 полностью декодированы FFmpeg. Размеры и SHA-256 совпали с файлами исполнителя #191 и данными релиза. [Описание записи и контрольные суммы видео](../go2-video.md).
