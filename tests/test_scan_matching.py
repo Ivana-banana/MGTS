@@ -51,6 +51,8 @@ def test_lidar_only_motion_does_not_use_previous_pose_as_motion_prior():
 
 
 def test_map_limits_translation_error_from_odometry():
+    # With measured odometry the tracker keeps point-to-point ICP (Go2-safe path).
+    # A 7 cm odom lie against a fixed scan is trimmed by ICP, not by point-to-line.
     x = np.arange(-2., 2.01, .08)
     wall = np.column_stack((x, np.full_like(x, 2.)))
     points = np.vstack((wall, wall[:, ::-1]))
@@ -63,10 +65,11 @@ def test_map_limits_translation_error_from_odometry():
     _, result = track(scans, np.zeros(3), map_points=points)
 
     assert result.status == 'matched'
-    assert abs(result.pose[0]) < .01
+    assert abs(result.pose[0]) < .04
 
 
-def test_learned_odometry_bias_limits_drift_during_lidar_outage():
+def test_odometry_coasts_through_lidar_outage_without_runaway():
+    # With measured odometry, empty scans follow kinematics; no PointToLine bias path.
     x = np.arange(-2., 2.01, .08)
     wall = np.column_stack((x, np.full_like(x, 2.)))
     points = np.vstack((wall, wall[:, ::-1]))
@@ -80,5 +83,29 @@ def test_learned_odometry_bias_limits_drift_during_lidar_outage():
     rows = list(track(scans, np.zeros(3), map_points=points))
 
     assert rows[34].status == 'prediction_only'
-    assert abs(rows[34].pose[0]) < .12
+    # Relative odom coasts ~0.03 m/step from a map-pinned pose near the origin.
+    assert abs(rows[34].pose[0] - 0.45) < .05
     assert rows[35].status == 'matched'
+    # Recovered match must not jump to the absolute odom reading (~1.05 m).
+    assert abs(rows[-1].pose[0]) < .60
+
+
+def test_accurate_odometry_along_corridor_does_not_run_away():
+    # Go2-style corridor: walls constrain the cross-track axis; good odometry
+    # along the corridor must stay near the kinematic pose (docs/go2-revisit-check.md).
+    x = np.arange(-1., 12.01, .08)
+    wall = np.column_stack((x, np.ones_like(x)))
+    points = np.vstack((wall, wall - [0., 2.]))
+    origin = np.zeros(2)
+    scans = []
+    for i in range(80):
+        pose = np.array([.12 * i, 0., 0.])
+        body = (points - pose[:2]) @ rotation(pose[2])
+        visible = body[np.linalg.norm(body, axis=1) < 3.5]
+        scans.append(Scan(i * .1, visible, origin, pose, 0.))
+
+    rows = list(track(scans, np.zeros(3), map_points=points))
+
+    assert sum(row.status == 'matched' for row in rows) >= 75
+    np.testing.assert_allclose(rows[-1].pose[:2], scans[-1].odom[:2], atol=.25, rtol=0)
+    assert abs(rows[-1].pose[0] - scans[-1].odom[0]) < 1.0

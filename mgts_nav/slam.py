@@ -204,34 +204,40 @@ def track(stream, initial, *, grid=None, map_points=None, recovery=None, velocit
         predicted = raw_prediction
         odom_step = previous is not None and scan.odom is not None
         has_translation = scan.odom is not None and (odom_step or previous_t is None)
-        dt = scan.t - previous_t if refinement is not None and odom_step else 0.
-        if dt > 0.:
+        dt = 0. if previous_t is None else scan.t - previous_t
+        if dt <= 0.:
+            velocity_bias.fill(0.)
+        previous = scan.odom
+        # Bias is only for coasting without lidar. Feeding it into ICP seeds made
+        # Go2 diverge from good odometry (1250 → 862 matches, multi-metre end error).
+        usable_lidar = len(scan.xy) >= MIN_MATCH_POINTS
+        if not usable_lidar and dt > 0. and not has_translation:
             speed = np.linalg.norm(velocity_bias)
             if speed > .06:
                 predicted = raw_prediction.copy()
                 predicted[:2] += dt * (1. - .06 / speed) * velocity_bias
-        else:
-            velocity_bias.fill(0.)
-        previous = scan.odom
         pose, support, status = predicted, 0.0, 'prediction_only'
         refined = None
-        if tree is None and len(scan.xy) >= MIN_MATCH_POINTS:
+        if tree is None and usable_lidar:
             status = 'origin'
         elif tree is not None:
             pose, support, accepted = match(scan.xy, tree, predicted)
             if accepted:
-                # Use ICP for unmeasured translation and keep the measured turn.
-                seed = predicted if has_translation else pose
-                if not has_translation and scan.gyro_delta is not None:
-                    seed = np.r_[pose[:2], predicted[2]]
-                refined = (refinement.refine(scan.xy, seed, predicted, odom_translation=has_translation)
-                           if refinement is not None else None)
-                if refined is not None:
-                    pose, support = refined
-                    if previous_fit and dt > 0.:
-                        # Filter the difference between lidar and raw odometry in map m/s.
-                        measured = (pose[:2] - raw_prediction[:2]) / dt
-                        velocity_bias += -np.expm1(-dt / .4) * (measured - velocity_bias)
+                # Point-to-line with odometry poisoned Go2 corridors (1250→862 matched).
+                # Keep it for lidar-only / gyro translation; with measured odom stay on ICP.
+                if not has_translation:
+                    seed = pose
+                    if scan.gyro_delta is not None:
+                        seed = np.r_[pose[:2], predicted[2]]
+                    candidate = (refinement.refine(scan.xy, seed, predicted, odom_translation=False)
+                                 if refinement is not None else None)
+                    if candidate is not None and candidate[1] + 1e-9 >= support:
+                        pose, support = candidate
+                        refined = candidate
+                        if previous_fit and dt > 0.:
+                            # Lidar vs raw prediction bias, used only while coasting.
+                            measured = (pose[:2] - raw_prediction[:2]) / dt
+                            velocity_bias += -np.expm1(-dt / .4) * (measured - velocity_bias)
                 status = 'matched'
         if recovery is not None:
             recovered = recovery.update(scan, status == 'matched')
