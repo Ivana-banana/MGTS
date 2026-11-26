@@ -1,0 +1,30 @@
+# Parameters of mgts_localizer. Values here are the ones measured in docs/final/results.md.
+mgts_localizer:
+  ros__parameters:
+    map_dir: /ros2_ws/mgts_map
+    map_file: map.pcd
+    cloud_topic: /utlidar/cloud_base     # base_link, per-point "time" (s after stamp) -> own deskew
+    odom_topic: /utlidar/robot_odom
+    init_mode: odom                      # odom | search | pose
+    initial_pose: [0.0, 0.0, 0.0]        # x, y, yaw for init_mode: pose
+    stamp_mode: auto                     # auto | header | clock (bags: header = recording clock - 80.8 s)
+    publish_odom_tf: true                # bags have no /tf: publish odom->base_link from odometry
+    publish_lidar_tf: true
+    deskew: true
+    dynamic_gate: 0.3                    # sweep points farther than this from the map -> /mgts/dynamic_points
+    max_pending: 2                       # sweeps waiting for processing; older ones are dropped and counted
+    odom_wait: 0.15                      # s to wait for odometry covering the whole sweep
+    reg_voxel: 0.10
+    min_range: 0.3
+    max_range: 12.0
+    prior_sigma_rot: 0.01
+    prior_sigma_trans: 0.02
+    planar: true
+    floor_height: -0.31
+    min_structure_ratio: 0.5
+    min_inlier_ratio: 0.35
+    max_correction_m: 0.5
+    max_iterations: 15
+    lost_after: 15
+    path_every: 7                        # publish /mgts/path every N sweeps (~2 Hz); /mgts/pose has every sweep
+    timing_csv: ''
